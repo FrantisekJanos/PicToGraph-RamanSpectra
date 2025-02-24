@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFileDialog, QLineEdit, QSizePolicy
+    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage
 from PyQt5.QtCore import Qt, QRect, QPoint
@@ -42,6 +42,7 @@ class MagnifierLabel(QLabel):
     def paintEvent(self, event):
         """ Překreslí lupu a přidá zaměřovací kříž """
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)  # Povolíme antialiasing
         if self.magnified_pixmap:
             painter.drawPixmap(0, 0, self.magnified_pixmap)
 
@@ -67,6 +68,15 @@ class CropLabel(QLabel):
         # Atributy pro režim kříže (pravítko)
         self.show_crosshair = False
         self.current_cursor_pos = None
+    def enterEvent(self, event):
+        # Zobrazí lupu, jakmile kurzor vstoupí do widgetu
+        self.magnifier.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        # Skryje lupu, když kurzor opustí widget
+        self.magnifier.hide()
+        super().leaveEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -74,32 +84,84 @@ class CropLabel(QLabel):
             self.end_point = self.start_point
             self.selection_rect = QRect(self.start_point, self.end_point)
             self.drawing = True
-            self.magnifier.show()
-            self.magnifier.raise_()
             self.updateMagnifier(event)
             self.update()
 
+    # def mouseMoveEvent(self, event):
+    #     self.current_cursor_pos = event.pos()
+    #     if self.drawing:
+    #         self.end_point = event.pos()
+    #         self.selection_rect = QRect(self.start_point, self.end_point).normalized()
+    #     self.updateMagnifier(event)
+    #     if self.show_crosshair:
+    #         self.update()
     def mouseMoveEvent(self, event):
         self.current_cursor_pos = event.pos()
+        # Vždy aktualizujeme lupu, aby byla viditelná i před kliknutím
+        self.updateMagnifier(event)
         if self.drawing:
             self.end_point = event.pos()
             self.selection_rect = QRect(self.start_point, self.end_point).normalized()
-            self.updateMagnifier(event)
-        if self.show_crosshair:
-            self.update()
+        self.update()  # Překreslí widget, aby byl výběrový rámeček viditelný
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.drawing:
             self.end_point = event.pos()
             self.selection_rect = QRect(self.start_point, self.end_point).normalized()
             self.drawing = False
-            self.magnifier.hide()
             self.update()
+
+    # def updateMagnifier(self, event):
+    #     base_pixmap = self.pixmap()
+    #     if base_pixmap is None:
+    #         self.magnifier.hide()
+    #         return
+    #     label_width = self.width()
+    #     label_height = self.height()
+    #     displayed_width = base_pixmap.width()
+    #     displayed_height = base_pixmap.height()
+    #     offset_x = (label_width - displayed_width) // 2
+    #     offset_y = (label_height - displayed_height) // 2
+    #
+    #     pixmap_pos = event.pos() - QPoint(offset_x, offset_y)
+    #     if (pixmap_pos.x() < 0 or pixmap_pos.y() < 0 or
+    #             pixmap_pos.x() >= displayed_width or pixmap_pos.y() >= displayed_height):
+    #         self.magnifier.show()
+    #         return
+    #
+    #     region_size = 30
+    #     half = region_size // 2
+    #
+    #
+    #     x = pixmap_pos.x() - half
+    #     y = pixmap_pos.y() - half
+    #     if x < 0:
+    #         x = 0
+    #     if y < 0:
+    #         y = 0
+    #     if x + region_size > displayed_width:
+    #         x = displayed_width - region_size
+    #     if y + region_size > displayed_height:
+    #         y = displayed_height - region_size
+    #
+    #     region = base_pixmap.copy(x, y, region_size, region_size)
+    #     magnified = region.scaled(self.magnifier.width(), self.magnifier.height(), Qt.KeepAspectRatio,
+    #                               Qt.SmoothTransformation)
+    #     # self.magnifier.setPixmap(magnified)
+    #
+    #     # Použití nové metody k aktualizaci zvětšené pixmapy
+    #     self.magnifier.setMagnifiedPixmap(magnified)
+    #
+    #     global_pos = self.mapToGlobal(event.pos())
+    #     offset = 20
+    #     self.magnifier.move(global_pos.x() + offset, global_pos.y() + offset)
 
     def updateMagnifier(self, event):
         base_pixmap = self.pixmap()
         if base_pixmap is None:
+            self.magnifier.hide()
             return
+
         label_width = self.width()
         label_height = self.height()
         displayed_width = base_pixmap.width()
@@ -107,40 +169,59 @@ class CropLabel(QLabel):
         offset_x = (label_width - displayed_width) // 2
         offset_y = (label_height - displayed_height) // 2
 
+        # Získáme pozici kurzoru relativně k pixmapě
         pixmap_pos = event.pos() - QPoint(offset_x, offset_y)
-        if (pixmap_pos.x() < 0 or pixmap_pos.y() < 0 or
-                pixmap_pos.x() >= displayed_width or pixmap_pos.y() >= displayed_height):
-            self.magnifier.hide()
-            return
 
         region_size = 30
         half = region_size // 2
-        x = pixmap_pos.x() - half
-        y = pixmap_pos.y() - half
-        if x < 0:
-            x = 0
-        if y < 0:
-            y = 0
-        if x + region_size > displayed_width:
-            x = displayed_width - region_size
-        if y + region_size > displayed_height:
-            y = displayed_height - region_size
 
-        region = base_pixmap.copy(x, y, region_size, region_size)
-        magnified = region.scaled(self.magnifier.width(), self.magnifier.height(), Qt.KeepAspectRatio,
-                                  Qt.SmoothTransformation)
-        # self.magnifier.setPixmap(magnified)
+        # Vytvoříme novou pixmapu s průhledným pozadím pro danou oblast
+        region_pixmap = QPixmap(region_size, region_size)
+        region_pixmap.fill(Qt.transparent)
+        painter = QPainter(region_pixmap)
 
-        # Použití nové metody k aktualizaci zvětšené pixmapy
+        # Definujeme zdrojovou oblast, jejíž střed má odpovídat poloze kurzoru
+        src_x = pixmap_pos.x() - half
+        src_y = pixmap_pos.y() - half
+        src_rect = QRect(src_x, src_y, region_size, region_size)
+
+        # Výchozí cílová oblast je celá oblast region_pixmap
+        dest_rect = QRect(0, 0, region_size, region_size)
+
+        # Pokud je zdrojová oblast částečně mimo hranice obrázku, upravíme ji a zároveň odpovídající část cílové oblasti
+        if src_rect.left() < 0:
+            diff = -src_rect.left()
+            src_rect.setLeft(0)
+            dest_rect.setLeft(diff)
+        if src_rect.top() < 0:
+            diff = -src_rect.top()
+            src_rect.setTop(0)
+            dest_rect.setTop(diff)
+        if src_rect.right() > displayed_width:
+            diff = src_rect.right() - displayed_width
+            src_rect.setRight(displayed_width)
+            dest_rect.setRight(region_size - diff)
+        if src_rect.bottom() > displayed_height:
+            diff = src_rect.bottom() - displayed_height
+            src_rect.setBottom(displayed_height)
+            dest_rect.setBottom(region_size - diff)
+
+        # Vykreslíme část obrázku z base_pixmap do naší region_pixmap
+        painter.drawPixmap(dest_rect, base_pixmap, src_rect)
+        painter.end()
+
+        # Zvětšíme region na velikost lupy
+        magnified = region_pixmap.scaled(self.magnifier.width(), self.magnifier.height(),
+                                         Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.magnifier.setMagnifiedPixmap(magnified)
-
         global_pos = self.mapToGlobal(event.pos())
         offset = 20
         self.magnifier.move(global_pos.x() + offset, global_pos.y() + offset)
-
+        self.magnifier.show()
     def paintEvent(self, event):
         super().paintEvent(event)
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)  # Povolíme antialiasing pro hladké vykreslení
         if self.selection_rect:
             pen = QPen(Qt.red, 2, Qt.SolidLine)
             painter.setPen(pen)
@@ -157,12 +238,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("PicToGraphApp - Raman Base")
         self.original_pixmap = None
+        self.last_x = None  # Inicializace spektra
+        self.last_y = None
         self.initUI()
 
     def initUI(self):
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+
+        # Přidání status baru pro zpětnou vazbu
+        self.setStatusBar(QStatusBar())
 
         # Horní část: obrázky
         image_layout = QHBoxLayout()
@@ -287,6 +373,9 @@ class MainWindow(QMainWindow):
             self.label_cropped.setText("Oříznutý obrázek")
             self.label_result.setText("Výsledek funkce se zobrazí zde")
             self.label_original.selection_rect = None
+            self.statusBar().showMessage("Obrázek načten.", 3000)
+        else:
+            QMessageBox.warning(self, "Chyba", "Nebyl vybrán žádný obrázek.")
 
     def crop_image(self):
         if self.original_pixmap and self.label_original.selection_rect:
@@ -351,7 +440,8 @@ class MainWindow(QMainWindow):
         """
         cropped_pixmap = self.label_cropped.pixmap()
         if not cropped_pixmap:
-            self.label_result.setText("Chybí oříznutý obrázek!")
+            # self.label_result.setText("Chybí oříznutý obrázek!")
+            QMessageBox.warning(self, "Chyba", "Chybí oříznutý obrázek!")
             return
 
         try:
@@ -361,7 +451,8 @@ class MainWindow(QMainWindow):
             y_min = float(self.input_ymin.text())
             y_max = float(self.input_ymax.text())
         except ValueError:
-            self.label_result.setText("Chybné hodnoty Xmin/Xmax/Ymin/Ymax!")
+            # self.label_result.setText("Chybné hodnoty Xmin/Xmax/Ymin/Ymax!")
+            QMessageBox.warning(self, "Chyba", "Chybné hodnoty Xmin/Xmax/Ymin/Ymax!")
             return
 
         try:
@@ -395,7 +486,8 @@ class MainWindow(QMainWindow):
             # Vytvoříme QImage z bytestreamu a nastavíme jej do label_result
             qimage = QImage.fromData(buf.getvalue(), 'PNG')
             if qimage.isNull():
-                self.label_result.setText("Nepodařilo se vykreslit graf.")
+                QMessageBox.critical(self, "Chyba", "Nepodařilo se vykreslit graf.")
+                # self.label_result.setText("Nepodařilo se vykreslit graf.")
             else:
                 pixmap = QPixmap.fromImage(qimage)
                 # Omezíme maximální výšku výsledného grafu, aby se nezvětšoval vertikálně
@@ -403,8 +495,10 @@ class MainWindow(QMainWindow):
                 if pixmap.height() > max_height:
                     pixmap = pixmap.scaledToHeight(max_height, Qt.SmoothTransformation)
                 self.label_result.setPixmap(pixmap)
+                self.statusBar().showMessage("Spektrum bylo úspěšně zpracováno.", 3000)
         except Exception as e:
-            self.label_result.setText(f"Nastala chyba při zpracování: {e}")
+            # self.label_result.setText(f"Nastala chyba při zpracování: {e}")
+            QMessageBox.critical(self, "Chyba", f"Nastala chyba při zpracování: {e}")
         finally:
             plt.ioff()
 
@@ -413,7 +507,8 @@ class MainWindow(QMainWindow):
         Exportuje spektrum uložené v self.last_x a self.last_y do CSV.
         """
         if self.last_x is None or self.last_y is None:
-            self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
+            # self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
+            QMessageBox.warning(self, "Chyba", "Spektrum ještě nebylo vygenerováno!")
             return
 
         file_path, _ = QFileDialog.getSaveFileName(self, "Export to CSV", "", "CSV Files (*.csv)")
@@ -426,25 +521,32 @@ class MainWindow(QMainWindow):
                 writer.writerow(["x", "y"])
                 for xi, yi in zip(self.last_x, self.last_y):
                     writer.writerow([xi, yi])
-            self.label_result.setText("Export byl úspěšný.")
+            # self.label_result.setText("Export byl úspěšný.")
+            QMessageBox.information(self, "Úspěch", "Export byl úspěšný.")
+            self.statusBar().showMessage("Export byl úspěšný.", 3000)
         except Exception as e:
-            self.label_result.setText(f"Export selhal: {e}")
+            # self.label_result.setText(f"Export selhal: {e}")
+            QMessageBox.critical(self, "Chyba", f"Export selhal: {e}")
+
 
     def find_peaks(self):
         try:
             sensitivity = float(self.input_sensitivity.text())
             min_distance = int(self.input_min_distance.text())
         except ValueError:
-            self.label_result.setText("Chybná hodnota pro sensitivity nebo min_distance!")
+            # self.label_result.setText("Chybná hodnota pro sensitivity nebo min_distance!")
+            QMessageBox.warning(self, "Chyba", "Chybná hodnota pro sensitivity nebo min_distance!")
             return
 
         # Předpokládáme, že spektrum (x a y) bylo dříve vygenerováno a uloženo do self.last_x, self.last_y
         if not hasattr(self, 'last_x') or not hasattr(self, 'last_y'):
-            self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
+            # self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
+            QMessageBox.warning(self, "Chyba", "Spektrum ještě nebylo vygenerováno!")
             return
 
         # Zavoláme funkci pro hledání peaků s parametry
         plot_spectrum_with_peaks(self.last_x, self.last_y, sensitivity, min_distance, show_peaks=True)
+        self.statusBar().showMessage("Peak detection proběhla úspěšně.", 3000)
 
 
 if __name__ == "__main__":
