@@ -12,6 +12,8 @@ from find_peaks import plot_spectrum_with_peaks
 import matplotlib.pyplot as plt
 import io
 import numpy as np
+import csv
+
 
 def qpixmap_to_array(pixmap):
     # Převod QPixmap na QImage
@@ -30,7 +32,28 @@ class MagnifierLabel(QLabel):
         self.setWindowFlags(Qt.ToolTip)
         self.setFixedSize(100, 100)
         self.setStyleSheet("border: 2px solid black;")
+        self.magnified_pixmap = None  # Uchováme zvětšený obrázek
 
+    def setMagnifiedPixmap(self, pixmap):
+        """ Nastaví zvětšený obrázek a překreslí widget """
+        self.magnified_pixmap = pixmap
+        self.update()
+
+    def paintEvent(self, event):
+        """ Překreslí lupu a přidá zaměřovací kříž """
+        painter = QPainter(self)
+        if self.magnified_pixmap:
+            painter.drawPixmap(0, 0, self.magnified_pixmap)
+
+        # Přidání zaměřovacího kříže
+        pen = QPen(Qt.red, 2, Qt.SolidLine)
+        painter.setPen(pen)
+        center_x = self.width() // 2
+        center_y = self.height() // 2
+
+        # Vykreslení horizontální a vertikální čáry
+        painter.drawLine(center_x, 0, center_x, self.height())  # Svislá čára
+        painter.drawLine(0, center_y, self.width(), center_y)  # Vodorovná čára
 
 class CropLabel(QLabel):
     def __init__(self, parent=None):
@@ -106,7 +129,11 @@ class CropLabel(QLabel):
         region = base_pixmap.copy(x, y, region_size, region_size)
         magnified = region.scaled(self.magnifier.width(), self.magnifier.height(), Qt.KeepAspectRatio,
                                   Qt.SmoothTransformation)
-        self.magnifier.setPixmap(magnified)
+        # self.magnifier.setPixmap(magnified)
+
+        # Použití nové metody k aktualizaci zvětšené pixmapy
+        self.magnifier.setMagnifiedPixmap(magnified)
+
         global_pos = self.mapToGlobal(event.pos())
         offset = 20
         self.magnifier.move(global_pos.x() + offset, global_pos.y() + offset)
@@ -238,6 +265,11 @@ class MainWindow(QMainWindow):
         btn_find_peaks = QPushButton("Find Peaks")
         btn_find_peaks.clicked.connect(self.find_peaks)
         main_layout.addWidget(btn_find_peaks)
+
+        # Nové tlačítko pro export do CSV
+        btn_export = QPushButton("Export to CSV")
+        btn_export.clicked.connect(self.export_to_csv)
+        main_layout.addWidget(btn_export)
 
         btn_crosshair = QPushButton("Zaměřování")
         btn_crosshair.setCheckable(True)
@@ -375,6 +407,28 @@ class MainWindow(QMainWindow):
             self.label_result.setText(f"Nastala chyba při zpracování: {e}")
         finally:
             plt.ioff()
+
+    def export_to_csv(self):
+        """
+        Exportuje spektrum uložené v self.last_x a self.last_y do CSV.
+        """
+        if self.last_x is None or self.last_y is None:
+            self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export to CSV", "", "CSV Files (*.csv)")
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(["x", "y"])
+                for xi, yi in zip(self.last_x, self.last_y):
+                    writer.writerow([xi, yi])
+            self.label_result.setText("Export byl úspěšný.")
+        except Exception as e:
+            self.label_result.setText(f"Export selhal: {e}")
 
     def find_peaks(self):
         try:

@@ -6,6 +6,9 @@ from skimage.morphology import remove_small_objects
 from skimage.measure import find_contours
 import numpy as np
 from PyQt5.QtGui import QImage
+from collections import defaultdict
+
+
 
 def qimage_to_array(qimage):
     qimage = qimage.convertToFormat(QImage.Format_RGBA8888)
@@ -16,6 +19,35 @@ def qimage_to_array(qimage):
     arr = np.array(ptr).reshape(height, width, 4)
     return arr[..., :3]  # Vrátíme jen RGB kanály
 
+def contours_to_center_line(contours):
+    """
+    Sloučí všechny body z (jedné či více) kontur do jedné křivky.
+    V každém integer sloupci x zprůměruje y-hodnoty a vytvoří 'středovou' linku.
+
+    Parameters:
+        contours (list of ndarray): List kontur z find_contours,
+            každá kontura je Nx2 (y, x).
+
+    Returns:
+        center_line (ndarray): Pole tvaru (M, 2) s (y, x),
+            kde pro každý integer x je jediné průměrné y.
+    """
+    x_dict = defaultdict(list)
+    # Projdeme všechny kontury a všechny body v nich
+    for contour in contours:
+        for (y, x) in contour:
+            x_int = int(round(x))  # zaokrouhlíme x na nejbližší celé číslo
+            x_dict[x_int].append(y)
+
+    # Vytvoříme výslednou křivku
+    center_line = []
+    for x_int in sorted(x_dict.keys()):
+        ys = x_dict[x_int]
+        # Zprůměrujeme všechny y v tomto sloupci
+        y_mean = np.mean(ys)
+        center_line.append([y_mean, x_int])
+
+    return np.array(center_line)
 
 def preprocess_image_from_array(img):
     """
@@ -29,12 +61,6 @@ def preprocess_image_from_array(img):
         img (ndarray): Původní obrázek.
         main_contour (ndarray): Kontura s největší délkou.
     """
-    # Předpokládáme, že img je numpy pole s alespoň 3 kanály (RGB)
-    from skimage.color import rgb2gray
-    from skimage.filters import threshold_otsu
-    from skimage.morphology import remove_small_objects
-    from skimage.measure import find_contours
-
     # Předpokládáme, že img má alespoň 3 kanály (RGB)
     rgb = img[:, :, :3]  # Vybereme pouze RGB kanály
     gray = rgb2gray(rgb)  # Převedeme na stupně šedi
@@ -51,11 +77,14 @@ def preprocess_image_from_array(img):
 
     if not contours:
         raise ValueError("Nebyla nalezena žádná kontura v obrázku.")
+    longest_contour = max(contours, key=len)
 
-    # Vybereme konturu s největší délkou
-    main_contour = max(contours, key=len)
+    # # Vybereme konturu s největší délkou
+    # main_contour = max(contours, key=len)
+    center_line = contours_to_center_line([longest_contour])
 
-    return img, main_contour
+
+    return img, center_line
 
 
 def calculate_figsize(img, base_width=10):
