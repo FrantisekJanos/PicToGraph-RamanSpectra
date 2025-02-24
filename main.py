@@ -62,12 +62,14 @@ class CropLabel(QLabel):
         self.start_point = None
         self.end_point = None
         self.selection_rect = None
+        self.selection_anchor = None  # Nový atribut pro výběr oblasti s klávesou Shift
         self.drawing = False  # Indikuje, zda probíhá kreslení výběru
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.StrongFocus)  # Aby widget přijímal klávesové události
         self.magnifier = MagnifierLabel()
         # Atributy pro režim kříže (pravítko)
         self.show_crosshair = False
-        self.current_cursor_pos = None
+        self.current_cursor_pos = QPoint(0, 0)
     def enterEvent(self, event):
         # Zobrazí lupu, jakmile kurzor vstoupí do widgetu
         self.magnifier.show()
@@ -80,29 +82,47 @@ class CropLabel(QLabel):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self.start_point = event.pos()
+            # Pokud držíme Shift, použijeme aktuální pozici jako anchor
+            if event.modifiers() & Qt.ShiftModifier:
+                self.selection_anchor = event.pos()
+            else:
+                # Jinak resetujeme anchor a nastavíme nový počáteční bod
+                self.selection_anchor = None
+                self.start_point = event.pos()
+            # self.start_point = event.pos()
             self.end_point = self.start_point
             self.selection_rect = QRect(self.start_point, self.end_point)
             self.drawing = True
             self.updateMagnifier(event)
             self.update()
+        super().mousePressEvent(event)
 
     # def mouseMoveEvent(self, event):
     #     self.current_cursor_pos = event.pos()
+    #     # Vždy aktualizujeme lupu, aby byla viditelná i před kliknutím
+    #     self.updateMagnifier(event)
     #     if self.drawing:
     #         self.end_point = event.pos()
     #         self.selection_rect = QRect(self.start_point, self.end_point).normalized()
-    #     self.updateMagnifier(event)
-    #     if self.show_crosshair:
-    #         self.update()
+    #     self.update()  # Překreslí widget, aby byl výběrový rámeček viditelný
+    #     super().mouseMoveEvent(event)
     def mouseMoveEvent(self, event):
         self.current_cursor_pos = event.pos()
-        # Vždy aktualizujeme lupu, aby byla viditelná i před kliknutím
-        self.updateMagnifier(event)
         if self.drawing:
-            self.end_point = event.pos()
-            self.selection_rect = QRect(self.start_point, self.end_point).normalized()
-        self.update()  # Překreslí widget, aby byl výběrový rámeček viditelný
+            # Pokud držíme Shift, použijeme uložený anchor pro výpočet výběru
+            if event.modifiers() & Qt.ShiftModifier and self.selection_anchor is not None:
+                self.end_point = event.pos()
+                self.selection_rect = QRect(self.selection_anchor, self.end_point).normalized()
+            else:
+                # Jinak (bez Shift) používáme start_point (nastavený při kliknutí)
+                self.end_point = event.pos()
+                self.selection_rect = QRect(self.start_point, self.end_point).normalized()
+            self.updateMagnifier(event)
+        else:
+            # Pokud se jen pohybujeme, aktualizujeme lupu
+            self.updateMagnifier(event)
+        self.update()
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.drawing:
@@ -155,7 +175,219 @@ class CropLabel(QLabel):
     #     global_pos = self.mapToGlobal(event.pos())
     #     offset = 20
     #     self.magnifier.move(global_pos.x() + offset, global_pos.y() + offset)
+    # def keyPressEvent(self, event):
+    #     step = 1  # počet pixelů, o které se posune kurzor
+    #     new_pos = QPoint(self.current_cursor_pos)
+    #     if event.key() == Qt.Key_Left:
+    #         new_pos -= QPoint(step, 0)
+    #     elif event.key() == Qt.Key_Right:
+    #         new_pos += QPoint(step, 0)
+    #     elif event.key() == Qt.Key_Up:
+    #         new_pos -= QPoint(0, step)
+    #     elif event.key() == Qt.Key_Down:
+    #         new_pos += QPoint(0, step)
+    #     else:
+    #         super().keyPressEvent(event)
+    #         return
+    #
+    #     self.current_cursor_pos = new_pos
+    #     # Pokud se provádí výběr, aktualizuj i výběrový rámeček
+    #     if self.drawing:
+    #         self.selection_rect = QRect(self.start_point, new_pos).normalized()
+    #     # Aktualizuj lupu na novou pozici
+    #     self.updateMagnifierAtPos(new_pos)
+    #     self.update()
+    #     event.accept()
+    # def keyPressEvent(self, event):
+    #     step = 5  # standardní posun, pokud není stisknuté Ctrl
+    #     new_pos = QPoint(self.current_cursor_pos)
+    #     ctrl_pressed = event.modifiers() & Qt.ControlModifier
+    #     shift_pressed = event.modifiers() & Qt.ShiftModifier
+    #
+    #     if event.key() == Qt.Key_Left:
+    #         if ctrl_pressed:
+    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "left")
+    #         else:
+    #             new_pos -= QPoint(step, 0)
+    #     elif event.key() == Qt.Key_Right:
+    #         if ctrl_pressed:
+    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "right")
+    #         else:
+    #             new_pos += QPoint(step, 0)
+    #     elif event.key() == Qt.Key_Up:
+    #         if ctrl_pressed:
+    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "up")
+    #         else:
+    #             new_pos -= QPoint(0, step)
+    #     elif event.key() == Qt.Key_Down:
+    #         if ctrl_pressed:
+    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "down")
+    #         else:
+    #             new_pos += QPoint(0, step)
+    #     else:
+    #         super().keyPressEvent(event)
+    #         return
+    #
+    #     self.current_cursor_pos = new_pos
+    #     if self.drawing:
+    #         self.selection_rect = QRect(self.start_point, new_pos).normalized()
+    #     self.updateMagnifierAtPos(new_pos)
+    #     self.update()
+    #     event.accept()
+    def keyPressEvent(self, event):
+        step = 1  # standardní posun v pixelech
+        new_pos = QPoint(self.current_cursor_pos)
+        ctrl_pressed = event.modifiers() & Qt.ControlModifier
+        shift_pressed = event.modifiers() & Qt.ShiftModifier
 
+        if event.key() == Qt.Key_Left:
+            if ctrl_pressed:
+                new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "left")
+            else:
+                new_pos -= QPoint(step, 0)
+        elif event.key() == Qt.Key_Right:
+            if ctrl_pressed:
+                new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "right")
+            else:
+                new_pos += QPoint(step, 0)
+        elif event.key() == Qt.Key_Up:
+            if ctrl_pressed:
+                new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "up")
+            else:
+                new_pos -= QPoint(0, step)
+        elif event.key() == Qt.Key_Down:
+            if ctrl_pressed:
+                new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "down")
+            else:
+                new_pos += QPoint(0, step)
+        else:
+            super().keyPressEvent(event)
+            return
+
+        # Pokud držíme Shift, nastavíme nebo využijeme anchor pro výběr
+        if shift_pressed:
+            if self.selection_anchor is None:
+                self.selection_anchor = QPoint(self.current_cursor_pos)
+            self.selection_rect = QRect(self.selection_anchor, new_pos).normalized()
+        else:
+            # Když Shift není stisknutý, pokud právě neprobíhá kreslení myší, anchor vymažeme
+            if not self.drawing:
+                self.selection_anchor = None
+            if self.drawing:
+                self.selection_rect = QRect(self.start_point, new_pos).normalized()
+
+        self.current_cursor_pos = new_pos
+        self.updateMagnifierAtPos(new_pos)
+        self.update()
+        event.accept()
+    def getNextBoundaryPos(self, pos, direction):
+        """
+        Vrátí novou pozici kurzoru (ve widgetu), která odpovídá dalšímu místu změny barvy pixelu.
+        """
+        base_pixmap = self.pixmap()
+        if base_pixmap is None:
+            return pos
+
+        # Přepočítej pozici widget -> pixmap
+        label_width = self.width()
+        label_height = self.height()
+        displayed_width = base_pixmap.width()
+        displayed_height = base_pixmap.height()
+        offset_x = (label_width - displayed_width) // 2
+        offset_y = (label_height - displayed_height) // 2
+        pixmap_pos = pos - QPoint(offset_x, offset_y)
+
+        # Získej QImage pro přístup k pixelům
+        image = base_pixmap.toImage()
+        # Zajisti, že pozice je v rozsahu
+        x = max(0, min(pixmap_pos.x(), displayed_width - 1))
+        y = max(0, min(pixmap_pos.y(), displayed_height - 1))
+        current_color = image.pixel(x, y)
+        new_pixmap_pos = QPoint(x, y)
+
+        if direction == "down":
+            for new_y in range(y + 1, displayed_height):
+                if image.pixel(x, new_y) != current_color:
+                    new_pixmap_pos.setY(new_y)
+                    break
+                new_pixmap_pos.setY(new_y)
+        elif direction == "up":
+            for new_y in range(y - 1, -1, -1):
+                if image.pixel(x, new_y) != current_color:
+                    new_pixmap_pos.setY(new_y)
+                    break
+                new_pixmap_pos.setY(new_y)
+        elif direction == "right":
+            for new_x in range(x + 1, displayed_width):
+                if image.pixel(new_x, y) != current_color:
+                    new_pixmap_pos.setX(new_x)
+                    break
+                new_pixmap_pos.setX(new_x)
+        elif direction == "left":
+            for new_x in range(x - 1, -1, -1):
+                if image.pixel(new_x, y) != current_color:
+                    new_pixmap_pos.setX(new_x)
+                    break
+                new_pixmap_pos.setX(new_x)
+
+        # Přepočítáme zpět na souřadnice widgetu
+        new_widget_pos = new_pixmap_pos + QPoint(offset_x, offset_y)
+        return new_widget_pos
+    def updateMagnifierAtPos(self, pos):
+        base_pixmap = self.pixmap()
+        if base_pixmap is None:
+            self.magnifier.hide()
+            return
+
+        label_width = self.width()
+        label_height = self.height()
+        displayed_width = base_pixmap.width()
+        displayed_height = base_pixmap.height()
+        offset_x = (label_width - displayed_width) // 2
+        offset_y = (label_height - displayed_height) // 2
+
+        # Pozice relativně k pixmapě
+        pixmap_pos = pos - QPoint(offset_x, offset_y)
+
+        region_size = 30
+        half = region_size // 2
+
+        # Podobná logika jako v updateMagnifier (s vlastními úpravami, pokud je kurzor mimo oblast)
+        region_pixmap = QPixmap(region_size, region_size)
+        region_pixmap.fill(Qt.transparent)
+        painter = QPainter(region_pixmap)
+        src_x = pixmap_pos.x() - half
+        src_y = pixmap_pos.y() - half
+        src_rect = QRect(src_x, src_y, region_size, region_size)
+        dest_rect = QRect(0, 0, region_size, region_size)
+
+        if src_rect.left() < 0:
+            diff = -src_rect.left()
+            src_rect.setLeft(0)
+            dest_rect.setLeft(diff)
+        if src_rect.top() < 0:
+            diff = -src_rect.top()
+            src_rect.setTop(0)
+            dest_rect.setTop(diff)
+        if src_rect.right() > displayed_width:
+            diff = src_rect.right() - displayed_width
+            src_rect.setRight(displayed_width)
+            dest_rect.setRight(region_size - diff)
+        if src_rect.bottom() > displayed_height:
+            diff = src_rect.bottom() - displayed_height
+            src_rect.setBottom(displayed_height)
+            dest_rect.setBottom(region_size - diff)
+
+        painter.drawPixmap(dest_rect, base_pixmap, src_rect)
+        painter.end()
+
+        magnified = region_pixmap.scaled(self.magnifier.width(), self.magnifier.height(),
+                                         Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.magnifier.setMagnifiedPixmap(magnified)
+        global_pos = self.mapToGlobal(pos)
+        offset = 20
+        self.magnifier.move(global_pos.x() + offset, global_pos.y() + offset)
+        self.magnifier.show()
     def updateMagnifier(self, event):
         base_pixmap = self.pixmap()
         if base_pixmap is None:
