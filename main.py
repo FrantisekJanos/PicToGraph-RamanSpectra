@@ -728,7 +728,7 @@ class MainWindow(QMainWindow):
             else:
                 pixmap = QPixmap.fromImage(qimage)
                 # Omezíme maximální výšku výsledného grafu, aby se nezvětšoval vertikálně
-                max_height = 500  # nastav dle potřeby
+                max_height = 400  # nastav dle potřeby
                 if pixmap.height() > max_height:
                     pixmap = pixmap.scaledToHeight(max_height, Qt.SmoothTransformation)
                 self.label_result.setPixmap(pixmap)
