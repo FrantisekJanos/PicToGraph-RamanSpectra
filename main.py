@@ -8,12 +8,13 @@ from PyQt5.QtCore import Qt, QRect, QPoint
 
 from simple_line import preprocess_image_from_array, extract_and_plot_contour
 from find_peaks import plot_spectrum_with_peaks
+from clustering import preprocess_image, display_clusters, check_clusters
 
 import matplotlib.pyplot as plt
 import io
 import numpy as np
 import csv
-
+import tempfile
 
 def qpixmap_to_array(pixmap):
     # Převod QPixmap na QImage
@@ -25,20 +26,66 @@ def qpixmap_to_array(pixmap):
     arr = np.array(ptr).reshape(height, width, 4)
     # Vrátíme pouze RGB kanály
     return arr[..., :3]
+
+
 class ClusterWindow(QWidget):
-    def __init__(self):
+    def __init__(self, cropped_pixmap=None):
         super().__init__()
         self.setWindowTitle("Cluster Window")
-        self.init_ui()
+        self.cropped_pixmap = cropped_pixmap
+        self.init_ui(cropped_pixmap)
 
-    def init_ui(self):
-        layout = QVBoxLayout(self)
-        label = QLabel("Počet clusterů:")
-        layout.addWidget(label)
+    def init_ui(self, cropped_pixmap):
+        self.layout = QVBoxLayout(self)
+
+        # Widget pro zobrazení oříznutého obrázku
+        self.label_image = QLabel()
+        self.label_image.setAlignment(Qt.AlignCenter)
+        if cropped_pixmap:
+            self.label_image.setPixmap(cropped_pixmap)
+        else:
+            self.label_image.setText("Žádný oříznutý obrázek")
+        self.layout.addWidget(self.label_image)
+
+        # Pole pro zadání počtu clusterů
+        label_clusters = QLabel("Počet clusterů:")
+        self.layout.addWidget(label_clusters)
+
         self.input_clusters = QLineEdit()
-        layout.addWidget(self.input_clusters)
+        self.layout.addWidget(self.input_clusters)
+
+        # Tlačítko pro vygenerování clusterů
         self.btn_generate_clusters = QPushButton("vygeneruj clustery")
-        layout.addWidget(self.btn_generate_clusters)
+        self.btn_generate_clusters.clicked.connect(self.on_generate_clusters)
+        self.layout.addWidget(self.btn_generate_clusters)
+
+        # Label pro zobrazení výsledného zpracovaného obrázku
+        self.label_processed = QLabel("Výsledek preprocess_image se zobrazí zde")
+        self.label_processed.setAlignment(Qt.AlignCenter)
+        self.layout.addWidget(self.label_processed)
+
+    def on_generate_clusters(self):
+        if self.cropped_pixmap is None:
+            self.label_processed.setText("Není k dispozici oříznutý obrázek.")
+            return
+
+        # Uložíme QPixmap do dočasného souboru, aby ho mohla načíst funkce preprocess_image
+        temp_filename = tempfile.mktemp(suffix=".png")
+        if not self.cropped_pixmap.save(temp_filename):
+            self.label_processed.setText("Chyba při ukládání obrázku.")
+            return
+
+        # Zavoláme funkci preprocess_image
+        # processed_image = preprocess_image(temp_filename)
+        processed_image = preprocess_image(temp_filename)
+        # Převedeme numpy pole na QImage (předpokládáme, že má tvar (výška, šířka, 3) a typ uint8)
+        height, width, channels = processed_image.shape
+        bytes_per_line = channels * width
+        qimage = QImage(processed_image.data, width, height, bytes_per_line, QImage.Format_RGB888)
+        qpixmap = QPixmap.fromImage(qimage)
+
+        # Vykreslíme zpracovaný obrázek do label_processed
+        self.label_processed.setPixmap(qpixmap)
 class MagnifierLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -505,7 +552,8 @@ class MainWindow(QMainWindow):
         btn_cluster.clicked.connect(self.open_cluster_window)
         main_layout.addWidget(btn_cluster)
     def open_cluster_window(self):
-        self.cluster_window = ClusterWindow()
+        cropped_pixmap = self.label_cropped.pixmap()
+        self.cluster_window = ClusterWindow(cropped_pixmap)
         self.cluster_window.show()
 
     def load_image(self):
