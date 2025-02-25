@@ -1,14 +1,15 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog
+    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog, QScrollArea
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage
 from PyQt5.QtCore import Qt, QRect, QPoint
 
 from simple_line import preprocess_image_from_array, extract_and_plot_contour
 from find_peaks import plot_spectrum_with_peaks
-from clustering import preprocess_image, display_clusters, check_clusters
+from clustering import preprocess_image, display_clusters, check_clusters_embedded
+from functools import partial
 
 import matplotlib.pyplot as plt
 import io
@@ -34,11 +35,12 @@ class ClusterWindow(QWidget):
         self.setWindowTitle("Cluster Window")
         self.cropped_pixmap = cropped_pixmap
         self.init_ui(cropped_pixmap)
+        self.showMaximized()
 
     def init_ui(self, cropped_pixmap):
         self.layout = QVBoxLayout(self)
 
-        # Widget pro zobrazení oříznutého obrázku
+        # Zobrazení oříznutého obrázku
         self.label_image = QLabel()
         self.label_image.setAlignment(Qt.AlignCenter)
         if cropped_pixmap:
@@ -47,10 +49,9 @@ class ClusterWindow(QWidget):
             self.label_image.setText("Žádný oříznutý obrázek")
         self.layout.addWidget(self.label_image)
 
-        # Pole pro zadání počtu clusterů
+        # Vstup pro zadání počtu clusterů
         label_clusters = QLabel("Počet clusterů:")
         self.layout.addWidget(label_clusters)
-
         self.input_clusters = QLineEdit()
         self.layout.addWidget(self.input_clusters)
 
@@ -59,33 +60,54 @@ class ClusterWindow(QWidget):
         self.btn_generate_clusters.clicked.connect(self.on_generate_clusters)
         self.layout.addWidget(self.btn_generate_clusters)
 
-        # Label pro zobrazení výsledného zpracovaného obrázku
-        self.label_processed = QLabel("Výsledek preprocess_image se zobrazí zde")
-        self.label_processed.setAlignment(Qt.AlignCenter)
-        self.layout.addWidget(self.label_processed)
+        # Scroll area pro výsledné obrázky (serie obrázků)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.results_container = QWidget()
+        self.results_layout = QVBoxLayout(self.results_container)
+        self.scroll_area.setWidget(self.results_container)
+        self.layout.addWidget(self.scroll_area)
 
     def on_generate_clusters(self):
         if self.cropped_pixmap is None:
-            self.label_processed.setText("Není k dispozici oříznutý obrázek.")
+            error_label = QLabel("Není k dispozici oříznutý obrázek.")
+            self.results_layout.addWidget(error_label)
             return
 
-        # Uložíme QPixmap do dočasného souboru, aby ho mohla načíst funkce preprocess_image
-        temp_filename = tempfile.mktemp(suffix=".png")
-        if not self.cropped_pixmap.save(temp_filename):
-            self.label_processed.setText("Chyba při ukládání obrázku.")
+        # Uložení QPixmap do dočasného souboru
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+            temp_sample = tmp_file.name
+        if not self.cropped_pixmap.save(temp_sample):
+            error_label = QLabel("Chyba při ukládání oříznutého obrázku.")
+            self.results_layout.addWidget(error_label)
             return
 
-        # Zavoláme funkci preprocess_image
-        # processed_image = preprocess_image(temp_filename)
-        processed_image = preprocess_image(temp_filename)
-        # Převedeme numpy pole na QImage (předpokládáme, že má tvar (výška, šířka, 3) a typ uint8)
-        height, width, channels = processed_image.shape
-        bytes_per_line = channels * width
-        qimage = QImage(processed_image.data, width, height, bytes_per_line, QImage.Format_RGB888)
-        qpixmap = QPixmap.fromImage(qimage)
+        # Přečtení počtu clusterů
+        try:
+            cluster_count = int(self.input_clusters.text())
+        except ValueError:
+            error_label = QLabel("Zadejte platné číslo pro počet clusterů.")
+            self.results_layout.addWidget(error_label)
+            return
 
-        # Vykreslíme zpracovaný obrázek do label_processed
-        self.label_processed.setPixmap(qpixmap)
+        # Vyprázdnit předchozí výsledky
+        while self.results_layout.count():
+            child = self.results_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Zavolání funkce check_clusters_embedded, která vrací seznam cest k výsledným obrázkům
+        image_paths = check_clusters_embedded(cluster_count, temp_sample)
+
+        # Pro každý soubor vytvoříme QLabel s načteným QPixmap a přidáme jej do layoutu
+        for path in image_paths:
+            pixmap = QPixmap(path)
+            if pixmap.isNull():
+                continue
+            label = QLabel()
+            label.setAlignment(Qt.AlignCenter)
+            label.setPixmap(pixmap)
+            self.results_layout.addWidget(label)
 class MagnifierLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -157,15 +179,6 @@ class CropLabel(QLabel):
             self.update()
         super().mousePressEvent(event)
 
-    # def mouseMoveEvent(self, event):
-    #     self.current_cursor_pos = event.pos()
-    #     # Vždy aktualizujeme lupu, aby byla viditelná i před kliknutím
-    #     self.updateMagnifier(event)
-    #     if self.drawing:
-    #         self.end_point = event.pos()
-    #         self.selection_rect = QRect(self.start_point, self.end_point).normalized()
-    #     self.update()  # Překreslí widget, aby byl výběrový rámeček viditelný
-    #     super().mouseMoveEvent(event)
     def mouseMoveEvent(self, event):
         self.current_cursor_pos = event.pos()
         if self.drawing:
@@ -427,6 +440,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("MainWindow")
         self.initUI()
+
 
     def initUI(self):
         central_widget = QWidget(self)
