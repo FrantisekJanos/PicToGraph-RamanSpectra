@@ -25,7 +25,20 @@ def qpixmap_to_array(pixmap):
     arr = np.array(ptr).reshape(height, width, 4)
     # Vrátíme pouze RGB kanály
     return arr[..., :3]
+class ClusterWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Cluster Window")
+        self.init_ui()
 
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        label = QLabel("Počet clusterů:")
+        layout.addWidget(label)
+        self.input_clusters = QLineEdit()
+        layout.addWidget(self.input_clusters)
+        self.btn_generate_clusters = QPushButton("vygeneruj clustery")
+        layout.addWidget(self.btn_generate_clusters)
 class MagnifierLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -131,109 +144,6 @@ class CropLabel(QLabel):
             self.drawing = False
             self.update()
 
-    # def updateMagnifier(self, event):
-    #     base_pixmap = self.pixmap()
-    #     if base_pixmap is None:
-    #         self.magnifier.hide()
-    #         return
-    #     label_width = self.width()
-    #     label_height = self.height()
-    #     displayed_width = base_pixmap.width()
-    #     displayed_height = base_pixmap.height()
-    #     offset_x = (label_width - displayed_width) // 2
-    #     offset_y = (label_height - displayed_height) // 2
-    #
-    #     pixmap_pos = event.pos() - QPoint(offset_x, offset_y)
-    #     if (pixmap_pos.x() < 0 or pixmap_pos.y() < 0 or
-    #             pixmap_pos.x() >= displayed_width or pixmap_pos.y() >= displayed_height):
-    #         self.magnifier.show()
-    #         return
-    #
-    #     region_size = 30
-    #     half = region_size // 2
-    #
-    #
-    #     x = pixmap_pos.x() - half
-    #     y = pixmap_pos.y() - half
-    #     if x < 0:
-    #         x = 0
-    #     if y < 0:
-    #         y = 0
-    #     if x + region_size > displayed_width:
-    #         x = displayed_width - region_size
-    #     if y + region_size > displayed_height:
-    #         y = displayed_height - region_size
-    #
-    #     region = base_pixmap.copy(x, y, region_size, region_size)
-    #     magnified = region.scaled(self.magnifier.width(), self.magnifier.height(), Qt.KeepAspectRatio,
-    #                               Qt.SmoothTransformation)
-    #     # self.magnifier.setPixmap(magnified)
-    #
-    #     # Použití nové metody k aktualizaci zvětšené pixmapy
-    #     self.magnifier.setMagnifiedPixmap(magnified)
-    #
-    #     global_pos = self.mapToGlobal(event.pos())
-    #     offset = 20
-    #     self.magnifier.move(global_pos.x() + offset, global_pos.y() + offset)
-    # def keyPressEvent(self, event):
-    #     step = 1  # počet pixelů, o které se posune kurzor
-    #     new_pos = QPoint(self.current_cursor_pos)
-    #     if event.key() == Qt.Key_Left:
-    #         new_pos -= QPoint(step, 0)
-    #     elif event.key() == Qt.Key_Right:
-    #         new_pos += QPoint(step, 0)
-    #     elif event.key() == Qt.Key_Up:
-    #         new_pos -= QPoint(0, step)
-    #     elif event.key() == Qt.Key_Down:
-    #         new_pos += QPoint(0, step)
-    #     else:
-    #         super().keyPressEvent(event)
-    #         return
-    #
-    #     self.current_cursor_pos = new_pos
-    #     # Pokud se provádí výběr, aktualizuj i výběrový rámeček
-    #     if self.drawing:
-    #         self.selection_rect = QRect(self.start_point, new_pos).normalized()
-    #     # Aktualizuj lupu na novou pozici
-    #     self.updateMagnifierAtPos(new_pos)
-    #     self.update()
-    #     event.accept()
-    # def keyPressEvent(self, event):
-    #     step = 5  # standardní posun, pokud není stisknuté Ctrl
-    #     new_pos = QPoint(self.current_cursor_pos)
-    #     ctrl_pressed = event.modifiers() & Qt.ControlModifier
-    #     shift_pressed = event.modifiers() & Qt.ShiftModifier
-    #
-    #     if event.key() == Qt.Key_Left:
-    #         if ctrl_pressed:
-    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "left")
-    #         else:
-    #             new_pos -= QPoint(step, 0)
-    #     elif event.key() == Qt.Key_Right:
-    #         if ctrl_pressed:
-    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "right")
-    #         else:
-    #             new_pos += QPoint(step, 0)
-    #     elif event.key() == Qt.Key_Up:
-    #         if ctrl_pressed:
-    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "up")
-    #         else:
-    #             new_pos -= QPoint(0, step)
-    #     elif event.key() == Qt.Key_Down:
-    #         if ctrl_pressed:
-    #             new_pos = self.getNextBoundaryPos(self.current_cursor_pos, "down")
-    #         else:
-    #             new_pos += QPoint(0, step)
-    #     else:
-    #         super().keyPressEvent(event)
-    #         return
-    #
-    #     self.current_cursor_pos = new_pos
-    #     if self.drawing:
-    #         self.selection_rect = QRect(self.start_point, new_pos).normalized()
-    #     self.updateMagnifierAtPos(new_pos)
-    #     self.update()
-    #     event.accept()
     def keyPressEvent(self, event):
         step = 1  # standardní posun v pixelech
         new_pos = QPoint(self.current_cursor_pos)
@@ -468,10 +378,7 @@ class CropLabel(QLabel):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PicToGraphApp - Raman Base")
-        self.original_pixmap = None
-        self.last_x = None  # Inicializace spektra
-        self.last_y = None
+        self.setWindowTitle("MainWindow")
         self.initUI()
 
     def initUI(self):
@@ -561,7 +468,6 @@ class MainWindow(QMainWindow):
         param_layout.addWidget(min_distance_label)
         param_layout.addWidget(self.input_min_distance)
 
-
         # Přidá stretch na konec, aby zbytek řádku zůstal prázdný
         param_layout.addStretch(1)
 
@@ -594,6 +500,13 @@ class MainWindow(QMainWindow):
         btn_crosshair.clicked.connect(self.toggle_crosshair)
         main_layout.addWidget(btn_crosshair)
 
+        # Přidání nového tlačítka "Rozdělit na clustery"
+        btn_cluster = QPushButton("Rozdělit na clustery")
+        btn_cluster.clicked.connect(self.open_cluster_window)
+        main_layout.addWidget(btn_cluster)
+    def open_cluster_window(self):
+        self.cluster_window = ClusterWindow()
+        self.cluster_window.show()
 
     def load_image(self):
         file_name, _ = QFileDialog.getOpenFileName(self, "Otevřít obrázek", "", "Image Files (*.png *.jpg *.bmp)")
