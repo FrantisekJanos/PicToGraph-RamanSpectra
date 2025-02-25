@@ -594,10 +594,6 @@ class MainWindow(QMainWindow):
         btn_crosshair.clicked.connect(self.toggle_crosshair)
         main_layout.addWidget(btn_crosshair)
 
-        btn_crosshair = QPushButton("Rozdělit na clustery")
-        btn_crosshair.setCheckable(True)
-        btn_crosshair.clicked.connect(self.toggle_crosshair)
-        main_layout.addWidget(btn_crosshair)
 
     def load_image(self):
         file_name, _ = QFileDialog.getOpenFileName(self, "Otevřít obrázek", "", "Image Files (*.png *.jpg *.bmp)")
