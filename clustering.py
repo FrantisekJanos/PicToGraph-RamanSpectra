@@ -9,6 +9,7 @@ from skimage.morphology import remove_small_objects, closing, disk
 from skimage.measure import find_contours
 import svgwrite
 import os
+import tempfile
 
 def preprocess_image(image_path):
     """
@@ -197,30 +198,57 @@ def display_selected_cluster(img_clustered, labels, cluster_index):
     return img_selected
 
 
-def check_clusters(cluster_count, sample_name):
-    # Parametry
-    image_path = sample_name
-    k = cluster_count  # Počet klastrů
-    # selected_cluster = 3            # Klastr, který chcete extrahovat
-
+def check_clusters_embedded(cluster_count, sample_name):
+    image_paths = []
+    k = cluster_count
 
     # Krok 1: Načtení a předzpracování obrázku
-    img_scaled = preprocess_image(image_path)
+    img_scaled = preprocess_image(sample_name)
     # Krok 2: Zvýšení kontrastu
     img_stretched = increase_contrast(img_scaled)
 
-    # Zobrazení obrázku s roztaženým kontrastem
-    plt.figure(figsize=(8, 6))
-    plt.imshow(img_stretched)
-    plt.axis('off')
-    plt.title('Obrázek s Contrast Stretching')
-    plt.show()
-    # Krok 3: Klastrování
+    # Krok 3: Uložení obrázku s contrast stretching
+    # fig1 = plt.figure(figsize=(8, 6))
+    # plt.imshow(img_stretched)
+    # plt.axis('off')
+    # plt.title('Obrázek s Contrast Stretching')
+    temp1 = tempfile.mktemp(suffix=".png")
+    # fig1.savefig(temp1, bbox_inches='tight')
+    image_paths.append(temp1)
+    # plt.close(fig1)
+
+    # Krok 4: Klastrování
     img_clustered, labels = cluster_colors(img_stretched, k=k)
 
-    # Krok 4: Zobrazení přeclusterovaného obrázku
-    display_clusters(img_clustered, k=k)
+    # Krok 5: Uložení přeclusterovaného obrázku
+    # fig2 = plt.figure(figsize=(8, 6))
+    # plt.imshow(img_clustered)
+    # plt.axis('off')
+    # plt.title(f'Obrázek s {k} barvami po KMeans klastrování')
+    temp2 = tempfile.mktemp(suffix=".png")
+    # fig2.savefig(temp2, bbox_inches='tight')
+    image_paths.append(temp2)
+    # plt.close(fig2)
 
-    # Krok 5: Zobrazení pouze vybraného klastru
+    # Krok 6: Pro každý klastr – zobrazení původního přeclusterovaného obrázku a obrázku jen s vybraným klastrem
+    height, width, _ = img_clustered.shape
     for n in range(k):
-        img_selected = display_selected_cluster(img_clustered, labels, n)
+        fig, ax = plt.subplots(figsize=(8, 8))  # Pouze jeden graf místo dvou
+
+        # Vytvoření masky pro vybraný klastr
+        mask = (labels == n).reshape((height, width))
+        img_selected = img_clustered.copy()
+        img_selected[~mask] = [255, 255, 255]  # Nastavení nevybraných pixelů na bílou
+
+        # Zobrazení pouze vybraného klastru
+        ax.imshow(img_selected)
+        ax.axis('off')  # Skrýt osy
+        ax.set_title(f'Obrázek pouze s Cluster {n}', fontsize=14)
+
+        # Uložení obrázku do dočasného souboru
+        temp_n = tempfile.mktemp(suffix=".png")
+        fig.savefig(temp_n, bbox_inches='tight', pad_inches=0.1)  # Přidán mírný padding pro lepší zobrazení
+        image_paths.append(temp_n)
+        plt.close(fig)
+
+    return image_paths
