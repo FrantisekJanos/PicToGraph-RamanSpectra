@@ -30,10 +30,11 @@ def qpixmap_to_array(pixmap):
 
 
 class ClusterWindow(QWidget):
-    def __init__(self, cropped_pixmap=None):
+    def __init__(self, cropped_pixmap=None, target_label=None):
         super().__init__()
         self.setWindowTitle("Cluster Window")
         self.cropped_pixmap = cropped_pixmap
+        self.target_label = target_label  # Uložíme referenci na cílový widget
         self.init_ui(cropped_pixmap)
         self.showMaximized()
 
@@ -74,7 +75,7 @@ class ClusterWindow(QWidget):
             self.results_layout.addWidget(error_label)
             return
 
-        # Uložení QPixmap do dočasného souboru
+        # Uložíme QPixmap do dočasného souboru
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
             temp_sample = tmp_file.name
         if not self.cropped_pixmap.save(temp_sample):
@@ -96,18 +97,27 @@ class ClusterWindow(QWidget):
             if child.widget():
                 child.widget().deleteLater()
 
-        # Zavolání funkce check_clusters_embedded, která vrací seznam cest k výsledným obrázkům
+        # Zavoláme funkci, která zpracuje obrázek a vrátí seznam cest k výsledným obrázkům.
         image_paths = check_clusters_embedded(cluster_count, temp_sample)
+        # Předpokládáme, že první dva obrázky nejsou clusterové (kontrast stretching, přeclusterovaný obrázek)
+        cluster_image_paths = image_paths[2:] if len(image_paths) > 2 else image_paths
 
-        # Pro každý soubor vytvoříme QLabel s načteným QPixmap a přidáme jej do layoutu
-        for path in image_paths:
+        # Pro každý cluster vytvoříme tlačítko s obrázkem jako ikonu
+        for path in cluster_image_paths:
             pixmap = QPixmap(path)
             if pixmap.isNull():
                 continue
-            label = QLabel()
-            label.setAlignment(Qt.AlignCenter)
-            label.setPixmap(pixmap)
-            self.results_layout.addWidget(label)
+            button = QPushButton()
+            button.setIcon(QIcon(pixmap))
+            button.setIconSize(pixmap.size())
+            button.setFlat(True)
+            button.clicked.connect(partial(self.select_cluster, pixmap))
+            self.results_layout.addWidget(button)
+    def select_cluster(self, pixmap):
+        """Při výběru clusteru nastaví vybraný obrázek do cílového widgetu a zavře okno."""
+        if self.target_label:
+            self.target_label.setPixmap(pixmap)
+        self.close()
 class MagnifierLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -478,23 +488,25 @@ class MainWindow(QMainWindow):
         param_layout.setSpacing(5)  # malá mezera mezi widgety
 
         # Xmin
-        label_xmin = QLabel("Xmin:")
+        label_xmin = QLabel("Xleft:")
         label_xmin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         param_layout.addWidget(label_xmin)
 
         self.input_xmin = QLineEdit()
         self.input_xmin.setFixedWidth(50)
         self.input_xmin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.input_xmin.setText("4000")  # Nastavení výchozí hodnoty
         param_layout.addWidget(self.input_xmin)
 
         # Xmax
-        label_xmax = QLabel("Xmax:")
+        label_xmax = QLabel("Xright:")
         label_xmax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         param_layout.addWidget(label_xmax)
 
         self.input_xmax = QLineEdit()
         self.input_xmax.setFixedWidth(50)
         self.input_xmax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.input_xmax.setText("0")  # Nastavení výchozí hodnoty
         param_layout.addWidget(self.input_xmax)
 
         # Ymin
@@ -505,6 +517,7 @@ class MainWindow(QMainWindow):
         self.input_ymin = QLineEdit()
         self.input_ymin.setFixedWidth(50)
         self.input_ymin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.input_ymin.setText("0")  # Nastavení výchozí hodnoty
         param_layout.addWidget(self.input_ymin)
 
         # Ymax
@@ -515,15 +528,18 @@ class MainWindow(QMainWindow):
         self.input_ymax = QLineEdit()
         self.input_ymax.setFixedWidth(50)
         self.input_ymax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.input_ymax.setText("100")  # Nastavení výchozí hodnoty
         param_layout.addWidget(self.input_ymax)
 
         # Find peaks
         sensitivity_label = QLabel("Sensitivity:")
         self.input_sensitivity = QLineEdit()
         self.input_sensitivity.setFixedWidth(50)
+        self.input_sensitivity.setText("10")  # Nastavení výchozí hodnoty
         min_distance_label = QLabel("Min distance:")
         self.input_min_distance = QLineEdit()
         self.input_min_distance.setFixedWidth(50)
+        self.input_min_distance.setText("10")  # Nastavení výchozí hodnoty
         param_layout.addWidget(sensitivity_label)
         param_layout.addWidget(self.input_sensitivity)
         param_layout.addWidget(min_distance_label)
@@ -565,9 +581,15 @@ class MainWindow(QMainWindow):
         btn_cluster = QPushButton("Rozdělit na clustery")
         btn_cluster.clicked.connect(self.open_cluster_window)
         main_layout.addWidget(btn_cluster)
+        # Zabalíme celý central_widget do QScrollArea:
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(central_widget)
+        self.setCentralWidget(scroll_area)
+
     def open_cluster_window(self):
         cropped_pixmap = self.label_cropped.pixmap()
-        self.cluster_window = ClusterWindow(cropped_pixmap)
+        self.cluster_window = ClusterWindow(cropped_pixmap, self.label_cropped)
         self.cluster_window.show()
 
     def load_image(self):
@@ -699,7 +721,7 @@ class MainWindow(QMainWindow):
             else:
                 pixmap = QPixmap.fromImage(qimage)
                 # Omezíme maximální výšku výsledného grafu, aby se nezvětšoval vertikálně
-                max_height = 400  # nastav dle potřeby
+                max_height = 600  # nastav dle potřeby
                 if pixmap.height() > max_height:
                     pixmap = pixmap.scaledToHeight(max_height, Qt.SmoothTransformation)
                 self.label_result.setPixmap(pixmap)
