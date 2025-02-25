@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar
+    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage
 from PyQt5.QtCore import Qt, QRect, QPoint
@@ -697,13 +697,13 @@ class MainWindow(QMainWindow):
             # Použijeme funkci preprocess_image_from_array, která očekává numpy pole
             # Ujisti se, že jsi tuto funkci importoval, např.:
             # from simple_line import preprocess_image_from_array, extract_and_plot_contour
-            img, main_contour = preprocess_image_from_array(img_array)
+            img, center_line, longest_contour = preprocess_image_from_array(img_array)
 
             # Vykreslíme graf do matplotlibu (bez plt.show())
             # extract_and_plot_contour(img, main_contour, x_min, x_max, y_min, y_max)
 
             # Vykreslíme graf a zároveň získáme data spektra (data_x, data_y)
-            data_x, data_y = extract_and_plot_contour(img, main_contour, x_min, x_max, y_min, y_max)
+            data_x, data_y = extract_and_plot_contour(img, center_line, x_min, x_max, y_min, y_max)
 
             # Uložíme spektrum pro použití funkcí (např. v tlačítku "find peaks")
             self.last_x = data_x
@@ -728,11 +728,43 @@ class MainWindow(QMainWindow):
                     pixmap = pixmap.scaledToHeight(max_height, Qt.SmoothTransformation)
                 self.label_result.setPixmap(pixmap)
                 self.statusBar().showMessage("Spektrum bylo úspěšně zpracováno.", 3000)
+            # Zobrazíme popup s longest_contour
+            self.show_longest_contour(longest_contour)
         except Exception as e:
             # self.label_result.setText(f"Nastala chyba při zpracování: {e}")
             QMessageBox.critical(self, "Chyba", f"Nastala chyba při zpracování: {e}")
         finally:
             plt.ioff()
+
+    def show_longest_contour(self, longest_contour):
+        """
+        Vytvoří a zobrazí vyskakovací okno s grafem longest_contour.
+        """
+        # Vytvoříme matplotlib figuru a vykreslíme longest_contour
+        fig, ax = plt.subplots()
+        ax.plot(longest_contour[:, 1], -longest_contour[:, 0], linewidth=2, label="Longest contour")
+        ax.set_title("Longest contour")
+        ax.legend()
+
+        # Uložíme graf do paměti
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png')
+        plt.close(fig)
+        buf.seek(0)
+
+        # Převedeme uložený obrázek na QImage a QPixmap
+        qimage = QImage.fromData(buf.getvalue(), 'PNG')
+        pixmap = QPixmap.fromImage(qimage)
+
+        # Vytvoříme dialog, kde zobrazíme QPixmap
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Longest Contour")
+        layout = QVBoxLayout(dialog)
+        label = QLabel()
+        label.setPixmap(pixmap)
+        layout.addWidget(label)
+        dialog.setLayout(layout)
+        dialog.exec_()
 
     def export_to_csv(self):
         """

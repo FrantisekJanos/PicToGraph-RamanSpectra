@@ -84,7 +84,7 @@ def preprocess_image_from_array(img):
     center_line = contours_to_center_line([longest_contour])
 
 
-    return img, center_line
+    return img, center_line, longest_contour
 
 
 def calculate_figsize(img, base_width=10):
