@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog, QScrollArea, QColorDialog
+    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog, QScrollArea, QColorDialog, QSplitter
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent, QMouseEvent
 from PyQt5.QtCore import Qt, QRect, QPoint
@@ -38,36 +38,128 @@ class ClusterWindow(QWidget):
         self.init_ui(cropped_pixmap)
         self.showMaximized()
 
-    def init_ui(self, cropped_pixmap):
-        self.layout = QVBoxLayout(self)
 
-        # Zobrazení oříznutého obrázku
+    # def init_ui(self, cropped_pixmap):
+    #     # Hlavní horizontální layout
+    #     main_layout = QHBoxLayout(self)
+    #
+    #     # Levá část – obsahuje oříznutý obrázek, vstup a tlačítko
+    #     left_layout = QVBoxLayout()
+    #
+    #     self.label_image = QLabel()
+    #     self.label_image.setAlignment(Qt.AlignCenter)
+    #     if cropped_pixmap:
+    #         self.label_image.setPixmap(cropped_pixmap)
+    #     else:
+    #         self.label_image.setText("Žádný oříznutý obrázek")
+    #     left_layout.addWidget(self.label_image)
+    #
+    #     label_clusters = QLabel("Počet clusterů:")
+    #     left_layout.addWidget(label_clusters)
+    #
+    #     self.input_clusters = QLineEdit()
+    #     left_layout.addWidget(self.input_clusters)
+    #
+    #     self.btn_generate_clusters = QPushButton("vygeneruj clustery")
+    #     self.btn_generate_clusters.clicked.connect(self.on_generate_clusters)
+    #     left_layout.addWidget(self.btn_generate_clusters)
+    #
+    #     # Pravá část – scroll area pro výsledné obrázky (serie obrázků)
+    #     right_layout = QVBoxLayout()
+    #
+    #     self.scroll_area = QScrollArea()
+    #     self.scroll_area.setWidgetResizable(True)
+    #     self.results_container = QWidget()
+    #     self.results_layout = QVBoxLayout(self.results_container)
+    #     self.scroll_area.setWidget(self.results_container)
+    #     right_layout.addWidget(self.scroll_area)
+    #
+    #     # Přidáme obě části do hlavního horizontálního layoutu
+    #     main_layout.addLayout(left_layout)
+    #     main_layout.addLayout(right_layout)
+    def init_ui(self, cropped_pixmap):
+        # Hlavní layout pro celé okno
+        main_layout = QVBoxLayout(self)
+
+        # Vytvoříme QSplitter pro horizontální rozdělení na levou a pravou část
+        splitter = QSplitter(Qt.Horizontal)
+
+        # Levá část – obsahuje obrázek a ovládací prvky
+        self.left_container = QWidget()
+        left_layout = QVBoxLayout(self.left_container)
+        left_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+
+        # Obrázek – nechceme jej škálovat, aby byl zobrazen v původní velikosti
         self.label_image = QLabel()
         self.label_image.setAlignment(Qt.AlignCenter)
         if cropped_pixmap:
             self.label_image.setPixmap(cropped_pixmap)
         else:
             self.label_image.setText("Žádný oříznutý obrázek")
-        self.layout.addWidget(self.label_image)
+        left_layout.addWidget(self.label_image)
 
-        # Vstup pro zadání počtu clusterů
+        # Widget s ovládacími prvky – tento widget budeme centrovat
+        self.controls_widget = QWidget()
+        controls_layout = QVBoxLayout(self.controls_widget)
+        controls_layout.setAlignment(Qt.AlignCenter)
+
+        # Label pro počet clusterů
         label_clusters = QLabel("Počet clusterů:")
-        self.layout.addWidget(label_clusters)
+        label_clusters.setAlignment(Qt.AlignCenter)
+        label_clusters.setStyleSheet("font-size: 18px;")
+        controls_layout.addWidget(label_clusters)
+
+        # Vstup pro počet clusterů
         self.input_clusters = QLineEdit()
-        self.layout.addWidget(self.input_clusters)
+        self.input_clusters.setStyleSheet("font-size: 18px;")
+        self.input_clusters.setText("4")
+        controls_layout.addWidget(self.input_clusters)
 
-        # Tlačítko pro vygenerování clusterů
+        # Tlačítko pro generování clusterů
         self.btn_generate_clusters = QPushButton("vygeneruj clustery")
+        self.btn_generate_clusters.setStyleSheet("font-size: 18px; padding: 10px;")
         self.btn_generate_clusters.clicked.connect(self.on_generate_clusters)
-        self.layout.addWidget(self.btn_generate_clusters)
 
-        # Scroll area pro výsledné obrázky (serie obrázků)
+        controls_layout.addWidget(self.btn_generate_clusters)
+
+        # Přidáme widget s ovládacími prvky pod obrázek a centrováme jej horizontálně
+        left_layout.addWidget(self.controls_widget, alignment=Qt.AlignHCenter)
+
+        # Pravá část – scrollovací oblast pro výsledné obrázky
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.results_container = QWidget()
         self.results_layout = QVBoxLayout(self.results_container)
         self.scroll_area.setWidget(self.results_container)
-        self.layout.addWidget(self.scroll_area)
+        right_layout.addWidget(self.scroll_area)
+
+        # Přidáme levý a pravý kontejner do splitteru
+        splitter.addWidget(self.left_container)
+        splitter.addWidget(right_container)
+        # Nastavíme relativní poměry: levá část ~30 %, pravá ~70 %
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 7)
+        # Volitelně můžeme nastavit minimální šířku pravé části, aby se nepříliš zmenšovala
+        right_container.setMinimumWidth(800)
+
+        main_layout.addWidget(splitter)
+
+        help_label = QLabel(
+            "Toto okno slouží k generování clusterů z oříznutého obrázku. "
+            "Zadejte počet clusterů a klikněte na tlačítko <b>vygeneruj clustery</b> "
+            "pro zobrazení výsledků."
+        )
+        help_label.setWordWrap(True)
+        help_label.setStyleSheet("font-size: 14px; color: #555;")
+        main_layout.addWidget(help_label)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Dynamicky nastavíme šířku widgetu s ovládacími prvky na 30 % šířky levé části
+        new_width = int(self.left_container.width() * 0.3)
+        self.controls_widget.setFixedWidth(new_width)
 
     def on_generate_clusters(self):
         if self.cropped_pixmap is None:
