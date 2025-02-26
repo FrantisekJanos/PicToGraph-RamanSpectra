@@ -1,9 +1,9 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog, QScrollArea
+    QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog, QScrollArea, QColorDialog
 )
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent
+from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent, QMouseEvent
 from PyQt5.QtCore import Qt, QRect, QPoint
 
 from simple_line import preprocess_image_from_array, extract_and_plot_contour
@@ -113,10 +113,19 @@ class ClusterWindow(QWidget):
             button.setFlat(True)
             button.clicked.connect(partial(self.select_cluster, pixmap))
             self.results_layout.addWidget(button)
+    # def select_cluster(self, pixmap):
+    #     """Při výběru clusteru nastaví vybraný obrázek do cílového widgetu a zavře okno."""
+    #     if self.target_label:
+    #         self.target_label.setPixmap(pixmap)
+    #     self.close()
     def select_cluster(self, pixmap):
-        """Při výběru clusteru nastaví vybraný obrázek do cílového widgetu a zavře okno."""
+        """Při výběru clusteru nastaví vybraný obrázek do cílového widgetu,
+        uloží jej do instance full_quality_cropped a zavře okno."""
         if self.target_label:
             self.target_label.setPixmap(pixmap)
+            main_window = self.target_label.window()
+            if hasattr(main_window, 'full_quality_cropped'):
+                main_window.full_quality_cropped = pixmap
         self.close()
 class MagnifierLabel(QLabel):
     def __init__(self, parent=None):
@@ -444,46 +453,221 @@ class CropLabel(QLabel):
             painter.drawLine(0, self.current_cursor_pos.y(), self.width(), self.current_cursor_pos.y())
             painter.drawLine(self.current_cursor_pos.x(), 0, self.current_cursor_pos.x(), self.height())
 
+
+# class EraserImageWindow(QWidget):
+#     def __init__(self, cropped_pixmap=None, target_label=None):
+#         super().__init__()
+#         self.setWindowTitle("Eraser Window")
+#         self.cropped_pixmap = cropped_pixmap  # Originální pixmapa (full quality)
+#         self.target_label = target_label  # Reference na widget, kde se má výsledný obrázek zobrazit
+#         self.zoom_factor = 1.0  # Počáteční zoom faktor
+#         self.init_ui(cropped_pixmap)
+#         self.showMaximized()
+#
+#     def init_ui(self, cropped_pixmap):
+#         self.layout = QVBoxLayout(self)
+#         if cropped_pixmap and not cropped_pixmap.isNull():
+#             # Vytvoříme widget Canvas pro úpravu obrázku
+#             self.canvas = Canvas(cropped_pixmap, self)
+#             # Vložíme Canvas do QScrollArea, aby bylo možné obrázek posouvat (bez automatického škálování)
+#             scroll_area = QScrollArea()
+#             scroll_area.setWidget(self.canvas)
+#             self.layout.addWidget(scroll_area)
+#         else:
+#             self.label_image = QLabel("Žádný oříznutý obrázek")
+#             self.label_image.setAlignment(Qt.AlignCenter)
+#             self.layout.addWidget(self.label_image)
+#
+#         # Tlačítko pro uložení upraveného obrázku
+#         self.btn_save = QPushButton("Uložit obrázek")
+#         self.btn_save.clicked.connect(self.select_eraser)
+#         self.layout.addWidget(self.btn_save)
+#
+#     def select_eraser(self):
+#         """
+#         Při stisknutí tlačítka:
+#          - Převede aktuální QImage z Canvasu na QPixmap.
+#          - Nastaví tento pixmap do target_label.
+#          - Aktualizuje instanci, kde je uložen původní oříznutý obrázek (např. v MainWindow.full_quality_cropped),
+#            a tím přepíše původní obrázek, který je vstupem pro funkci zpracovat spektrum.
+#          - Zavře okno.
+#         """
+#         if self.target_label and hasattr(self, 'canvas'):
+#             new_pixmap = QPixmap.fromImage(self.canvas.image)
+#             self.target_label.setPixmap(new_pixmap)
+#             # Aktualizace instance obsahující původní oříznutý obrázek.
+#             # Předpokládáme, že target_label je součástí hlavního okna, kde je uložen atribut full_quality_cropped.
+#             main_window = self.target_label.window()
+#             if hasattr(main_window, 'full_quality_cropped'):
+#                 main_window.full_quality_cropped = new_pixmap
+#         self.close()
+
+# class Canvas(QWidget):
+#     def __init__(self, pixmap, parent=None):
+#         super().__init__(parent)
+#         self.eraserRadius = 10  # Poloměr štětce/eraseru
+#         # Převod QPixmap na QImage v původní kvalitě (s podporou průhlednosti)
+#         if pixmap is None or pixmap.isNull():
+#             self.image = QImage()
+#         else:
+#             self.image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
+#         # Nastavení pevné velikosti dle obrázku
+#         self.setFixedSize(self.image.size())
+#         # Výchozí barva – pokud není vybrána, používá se eraser (clear)
+#         self.brush_color = None
+#
+#     def mousePressEvent(self, event: QMouseEvent):
+#         if event.button() == Qt.RightButton:
+#             # Pravým tlačítkem otevřeme dialog pro výběr barvy
+#             color = QColorDialog.getColor()
+#             if color.isValid():
+#                 self.brush_color = color
+#         super().mousePressEvent(event)
+#
+#     def mouseMoveEvent(self, event: QMouseEvent):
+#         if event.buttons() & Qt.LeftButton:
+#             painter = QPainter(self.image)
+#             painter.setPen(Qt.NoPen)
+#             if self.brush_color is not None:
+#                 # Použijeme vybranou barvu – režim kreslení přes (source over)
+#                 painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+#                 painter.setBrush(self.brush_color)
+#             else:
+#                 # Pokud není barva vybrána, použijeme eraser (vymaže oblast)
+#                 painter.setCompositionMode(QPainter.CompositionMode_Clear)
+#                 painter.setBrush(Qt.black)  # Hodnota brush nehraje roli v Clear módu
+#             # Kreslíme vyplněný kruh přímo pod kurzorem
+#             painter.drawEllipse(event.pos(), self.eraserRadius, self.eraserRadius)
+#             painter.end()
+#             self.update()
+#
+#     def paintEvent(self, event):
+#         painter = QPainter(self)
+#         painter.drawImage(0, 0, self.image)
 class EraserImageWindow(QWidget):
     def __init__(self, cropped_pixmap=None, target_label=None):
         super().__init__()
         self.setWindowTitle("Eraser Window")
-        self.cropped_pixmap = cropped_pixmap  # originální pixmapa
-        self.target_label = target_label      # reference na cílový widget
-        self.zoom_factor = 1.0                # počáteční zoom faktor
+        self.cropped_pixmap = cropped_pixmap  # Originální pixmapa (full quality)
+        self.target_label = target_label  # Widget, kam se má výsledný obrázek uložit
+        self.zoom_factor = 1.0  # Počáteční zoom faktor (není přímo použit v této třídě)
         self.init_ui(cropped_pixmap)
         self.showMaximized()
 
     def init_ui(self, cropped_pixmap):
         self.layout = QVBoxLayout(self)
-
-        # Zobrazení oříznutého obrázku
-        self.label_image = QLabel()
-        self.label_image.setAlignment(Qt.AlignCenter)
-        if cropped_pixmap:
-            self.label_image.setPixmap(cropped_pixmap)
+        if cropped_pixmap and not cropped_pixmap.isNull():
+            # Vytvoříme widget Canvas pro úpravu obrázku se zoomem a výběrem barvy
+            self.canvas = Canvas(cropped_pixmap, self)
+            # Vložíme Canvas do QScrollArea a centrování nastavíme pomocí setAlignment
+            scroll_area = QScrollArea()
+            scroll_area.setWidget(self.canvas)
+            scroll_area.setAlignment(Qt.AlignCenter)
+            self.layout.addWidget(scroll_area)
         else:
-            self.label_image.setText("Žádný oříznutý obrázek")
-        self.layout.addWidget(self.label_image)
+            self.label_image = QLabel("Žádný oříznutý obrázek")
+            self.label_image.setAlignment(Qt.AlignCenter)
+            self.layout.addWidget(self.label_image)
+
+        # Tlačítko pro uložení upraveného obrázku
+        self.btn_save = QPushButton("Uložit obrázek")
+        self.btn_save.clicked.connect(self.select_eraser)
+        self.layout.addWidget(self.btn_save)
+
+    def select_eraser(self):
+        """
+        Při stisknutí tlačítka:
+         - Převádí aktuální QImage z Canvasu na QPixmap.
+         - Nastaví tento pixmap do target_label.
+         - Aktualizuje instanci, kde je uložen původní oříznutý obrázek,
+           a tím přepíše původní obrázek, který je vstupem pro další zpracování.
+         - Zavře okno.
+        """
+        if self.target_label and hasattr(self, 'canvas'):
+            new_pixmap = QPixmap.fromImage(self.canvas.image)
+            self.target_label.setPixmap(new_pixmap)
+            # Aktualizace instance s původním obrázkem (např. MainWindow.full_quality_cropped)
+            main_window = self.target_label.window()
+            if hasattr(main_window, 'full_quality_cropped'):
+                main_window.full_quality_cropped = new_pixmap
+        self.close()
+class Canvas(QWidget):
+    def __init__(self, pixmap, parent=None):
+        super().__init__(parent)
+        self.eraserRadius = 10  # Poloměr štětce/eraseru
+        # Převod QPixmap na QImage ve full quality se zachováním alfa kanálu
+        if pixmap is None or pixmap.isNull():
+            self.image = QImage()
+        else:
+            self.image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
+        self.original_size = self.image.size()  # Původní velikost obrázku
+        self.zoom_factor = 1.0  # Výchozí zoom faktor
+        self.setFixedSize(self.original_size)
+        # Výchozí barva pro kreslení; pokud není vybrána, použije se režim gumy
+        self.brush_color = None
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        # Aplikujeme škálovací transformaci
+        painter.scale(self.zoom_factor, self.zoom_factor)
+        painter.drawImage(0, 0, self.image)
 
     def wheelEvent(self, event: QWheelEvent):
-        # Zjistíme směr otáčení kolečka
-        if event.angleDelta().y() > 0:
-            self.zoom_factor *= 1.1  # zvětšení
+        # Zoom pomocí kolečka myši
+        delta = event.angleDelta().y()
+        if delta > 0:
+            self.zoom_factor *= 1.1
         else:
-            self.zoom_factor *= 0.9  # zmenšení
-
-        # Nastavení rozumných limitů zoomu
+            self.zoom_factor *= 0.9
+        # Nastavíme limity zoomu
         if self.zoom_factor < 0.1:
             self.zoom_factor = 0.1
-        elif self.zoom_factor > 10:
+        if self.zoom_factor > 10:
             self.zoom_factor = 10
+        # Aktualizujeme velikost widgetu podle nového zoom faktoru
+        new_width = int(self.original_size.width() * self.zoom_factor)
+        new_height = int(self.original_size.height() * self.zoom_factor)
+        self.setFixedSize(new_width, new_height)
+        self.update()
 
-        # Aktualizujeme zobrazený obrázek podle nového zoom factoru
-        if self.cropped_pixmap:
-            new_size = self.cropped_pixmap.size() * self.zoom_factor
-            scaled_pixmap = self.cropped_pixmap.scaled(new_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.label_image.setPixmap(scaled_pixmap)
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.RightButton:
+            # Pravým tlačítkem vybereme barvu přímo z obrázku (color picker)
+            # Přepočítáme souřadnice z widgetu na souřadnice originálního obrázku
+            pos = event.pos()
+            x = int(pos.x() / self.zoom_factor)
+            y = int(pos.y() / self.zoom_factor)
+            if x < self.image.width() and y < self.image.height():
+                color = self.image.pixelColor(x, y)
+                self.brush_color = color
+                print("Vybraná barva:", color.name())
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if event.buttons() & Qt.LeftButton:
+            self.paintAt(event)
+
+    def paintAt(self, event: QMouseEvent):
+        # Přepočítáme pozici z widget souřadnic na originální souřadnice obrázku
+        pos = event.pos()
+        x = int(pos.x() / self.zoom_factor)
+        y = int(pos.y() / self.zoom_factor)
+        painter = QPainter(self.image)
+        painter.setPen(Qt.NoPen)
+        if self.brush_color is not None:
+            # Pokud máme vybranou barvu, kreslíme s ní (normální režim)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            painter.setBrush(self.brush_color)
+        else:
+            # Jinak použijeme režim gumy (clear)
+            painter.setCompositionMode(QPainter.CompositionMode_Clear)
+            painter.setBrush(Qt.black)  # V Clear módu hodnota brush nehraje roli
+        # Vykreslíme vyplněný kruh se středem v (x,y)
+        painter.drawEllipse(QPoint(x, y), self.eraserRadius, self.eraserRadius)
+        painter.end()
+        self.update()
 
 class MainWindow(QMainWindow):
     def __init__(self):
