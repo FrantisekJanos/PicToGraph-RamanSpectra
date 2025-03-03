@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent, QMouseEvent, QColor
 from PyQt5.QtCore import Qt, QRect, QPoint
+from PyQt5.Qt import QApplication
 
 from simple_line import preprocess_image_from_array, extract_and_plot_contour
 from find_peaks import plot_spectrum_with_peaks
@@ -523,12 +524,13 @@ class EraserImageWindow(QWidget):
             self.canvas = Canvas(cropped_pixmap, self)
             self.color_indicator = ColorIndicator(self)
 
-            # Vytvoříme kontejner pro indikátor barvy a popisek a tlačítko "Zpět"
+            # Vytvoříme kontejner pro indikátor barvy, popisek a tlačítko "Zpět"
             color_panel = QWidget(self)
+            color_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
             color_layout = QVBoxLayout(color_panel)
             color_layout.setContentsMargins(0, 0, 0, 0)
             color_layout.setSpacing(5)
-            # První řádek: horizontální layout s indikátorem a popiskem
+            # První řádek: indikátor a popisek
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(5)
@@ -543,6 +545,10 @@ class EraserImageWindow(QWidget):
             self.btn_undo.setStyleSheet("font-size: 18px; padding: 10px;")
             self.btn_undo.clicked.connect(self.undo_canvas)
             color_layout.addWidget(self.btn_undo)
+            color_layout.addStretch()
+
+            # Uložíme color_panel jako atribut pro pozdější úpravy
+            self.color_panel = color_panel
 
             # Kontejner pro Canvas a color_panel (vedle sebe)
             container = QWidget(self)
@@ -550,7 +556,7 @@ class EraserImageWindow(QWidget):
             h_layout.setContentsMargins(0, 0, 0, 0)
             h_layout.setSpacing(10)
             h_layout.addWidget(QScrollAreaWithCentering(self.canvas))
-            h_layout.addWidget(color_panel)
+            h_layout.addWidget(self.color_panel)
             self.layout.addWidget(container)
         else:
             self.label_image = QLabel("Žádný oříznutý obrázek", self)
@@ -577,8 +583,12 @@ class EraserImageWindow(QWidget):
         self.layout.addWidget(self.bottom_widget)
 
     def resizeEvent(self, event):
+        # Nastavení šířky tlačítka Uložit obrázek na 30% šířky okna
         new_width = int(self.width() * 0.3)
         self.btn_save.setFixedWidth(new_width)
+        # Nastavíme také šířku pravého panelu (color_panel) na 30% šířky okna
+        if hasattr(self, 'color_panel'):
+            self.color_panel.setFixedWidth(new_width)
         super().resizeEvent(event)
 
     def undo_canvas(self):
@@ -705,6 +715,419 @@ class Canvas(QWidget):
             self.image = self.undo_stack[-1].copy()
             self.update()
 
+# class MainWindow(QMainWindow):
+#     def __init__(self):
+#         super().__init__()
+#         self.setWindowTitle("MainWindow")
+#         self.initUI()
+#
+#     def initUI(self):
+#         central_widget = QWidget(self)
+#         self.setCentralWidget(central_widget)
+#         main_layout = QVBoxLayout(central_widget)
+#
+#         # Přidání status baru pro zpětnou vazbu
+#         self.setStatusBar(QStatusBar())
+#
+#         # Horní část: obrázky
+#         image_layout = QHBoxLayout()
+#         main_layout.addLayout(image_layout)
+#
+#         self.label_original = CropLabel()
+#         self.label_original.setAlignment(Qt.AlignCenter)
+#         self.label_original.setStyleSheet("background-color: #ccc;")
+#         image_layout.addWidget(self.label_original)
+#
+#         # Pravá část – rozdělená do dvou vertikálních oblastí
+#         right_layout = QVBoxLayout()
+#         self.label_cropped = QLabel("Oříznutý obrázek")
+#         self.label_cropped.setAlignment(Qt.AlignCenter)
+#         right_layout.addWidget(self.label_cropped)
+#
+#         self.label_result = QLabel("Výsledek funkce se zobrazí zde")
+#         self.label_result.setAlignment(Qt.AlignCenter)
+#         self.label_result.setStyleSheet("background-color: #eee; border: 1px solid #ccc;")
+#         right_layout.addWidget(self.label_result)
+#
+#         image_layout.addLayout(right_layout)
+#
+#         # Řádek se vstupními poli – parametry
+#         param_layout = QHBoxLayout()
+#         param_layout.setContentsMargins(0, 0, 0, 0)
+#         param_layout.setSpacing(5)
+#
+#         # Xleft
+#         label_xmin = QLabel("Xleft:")
+#         label_xmin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         param_layout.addWidget(label_xmin)
+#
+#         self.input_xmin = QLineEdit()
+#         self.input_xmin.setFixedWidth(50)
+#         self.input_xmin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         self.input_xmin.setText("4000")
+#         param_layout.addWidget(self.input_xmin)
+#
+#         # Xright
+#         label_xmax = QLabel("Xright:")
+#         label_xmax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         param_layout.addWidget(label_xmax)
+#
+#         self.input_xmax = QLineEdit()
+#         self.input_xmax.setFixedWidth(50)
+#         self.input_xmax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         self.input_xmax.setText("0")
+#         param_layout.addWidget(self.input_xmax)
+#
+#         # Ymin
+#         label_ymin = QLabel("Ymin:")
+#         label_ymin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         param_layout.addWidget(label_ymin)
+#
+#         self.input_ymin = QLineEdit()
+#         self.input_ymin.setFixedWidth(50)
+#         self.input_ymin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         self.input_ymin.setText("0")
+#         param_layout.addWidget(self.input_ymin)
+#
+#         # Ymax
+#         label_ymax = QLabel("Ymax:")
+#         label_ymax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         param_layout.addWidget(label_ymax)
+#
+#         self.input_ymax = QLineEdit()
+#         self.input_ymax.setFixedWidth(50)
+#         self.input_ymax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         self.input_ymax.setText("100")
+#         param_layout.addWidget(self.input_ymax)
+#
+#         # Další parametry pro Find Peaks
+#         sensitivity_label = QLabel("Sensitivity:")
+#         self.input_sensitivity = QLineEdit()
+#         self.input_sensitivity.setFixedWidth(50)
+#         self.input_sensitivity.setText("10")
+#         min_distance_label = QLabel("Min distance:")
+#         self.input_min_distance = QLineEdit()
+#         self.input_min_distance.setFixedWidth(50)
+#         self.input_min_distance.setText("10")
+#         param_layout.addWidget(sensitivity_label)
+#         param_layout.addWidget(self.input_sensitivity)
+#         param_layout.addWidget(min_distance_label)
+#         param_layout.addWidget(self.input_min_distance)
+#
+#         param_layout.addStretch(1)
+#         main_layout.addLayout(param_layout)
+#
+#         # Spodní část: tlačítka rozdělená do 3 sloupců
+#         bottom_container = QWidget()
+#         bottom_container.setFixedHeight(250)  # Pevná výška spodního panelu
+#         bottom_layout = QHBoxLayout(bottom_container)
+#         bottom_layout.setContentsMargins(0, 0, 0, 0)
+#         bottom_layout.setSpacing(5)
+#
+#         # 1. sloupec: nápověda (help_label)
+#         help_label = QLabel(
+#             "1) Press the button <b>load picture</b> or insert picture from clipboard<br>"
+#             "2) Select area to be cropped by mouse or click and select by holding <b>ctrl</b> with pressing arrows and press button <b>crop picture</b><br>"
+#             "3) By holding <b>ctrl + shift</b> you can jump in selecting by arrows up to first pixel color change<br>"
+#             "4) Cropped picture you can process by <b>eraser</b> or <b>clustering</b><br>"
+#             "5) Processed picture can be transformed to dataset by pressing <b>Process spectra button</b><br>"
+#             "6) Processed can be exported to csv by pressing <b>export CSV</b> button<br>"
+#
+#         )
+#         help_label.setWordWrap(True)
+#         help_label.setStyleSheet("font-size: 14px; color: #555;")
+#         help_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+#         col1_layout = QVBoxLayout()
+#         col1_layout.addWidget(help_label)
+#         col1_layout.addStretch()
+#         bottom_layout.addLayout(col1_layout)
+#
+#         # 2. sloupec: levá skupina tlačítek
+#         left_buttons_layout = QVBoxLayout()
+#         self.btn_load = QPushButton("Načíst obrázek")
+#         self.btn_load.clicked.connect(self.load_image)
+#         left_buttons_layout.addWidget(self.btn_load)
+#
+#         self.btn_crop = QPushButton("Oříznout obrázek")
+#         self.btn_crop.clicked.connect(self.crop_image)
+#         left_buttons_layout.addWidget(self.btn_crop)
+#
+#         self.btn_crosshair = QPushButton("Zaměřování")
+#         self.btn_crosshair.setCheckable(True)
+#         self.btn_crosshair.clicked.connect(self.toggle_crosshair)
+#         left_buttons_layout.addWidget(self.btn_crosshair)
+#
+#         self.btn_show_eraser = QPushButton("Zobrazit Eraser")
+#         self.btn_show_eraser.clicked.connect(self.openEraserImageWindow)
+#         left_buttons_layout.addWidget(self.btn_show_eraser)
+#         bottom_layout.addLayout(left_buttons_layout)
+#
+#         # 3. sloupec: pravá skupina tlačítek
+#         right_buttons_layout = QVBoxLayout()
+#         self.btn_cluster = QPushButton("Rozdělit na clustery")
+#         self.btn_cluster.clicked.connect(self.open_cluster_window)
+#         right_buttons_layout.addWidget(self.btn_cluster)
+#
+#         self.btn_process = QPushButton("Zpracovat spektrum")
+#         self.btn_process.clicked.connect(self.process_cropped_image)
+#         right_buttons_layout.addWidget(self.btn_process)
+#
+#         self.btn_find_peaks = QPushButton("Find Peaks")
+#         self.btn_find_peaks.clicked.connect(self.find_peaks)
+#         right_buttons_layout.addWidget(self.btn_find_peaks)
+#
+#         self.btn_export = QPushButton("Export to CSV")
+#         self.btn_export.clicked.connect(self.export_to_csv)
+#         right_buttons_layout.addWidget(self.btn_export)
+#         bottom_layout.addLayout(right_buttons_layout)
+#
+#         main_layout.addWidget(bottom_container)
+#
+#         # Zabalení central_widget do QScrollArea
+#         scroll_area = QScrollArea()
+#         scroll_area.setWidgetResizable(True)
+#         scroll_area.setWidget(central_widget)
+#         self.setCentralWidget(scroll_area)
+#
+#         # Nastavení stylů pro tlačítka – zvětšený text, padding a pevná výška
+#         for btn in [self.btn_load, self.btn_crop, self.btn_crosshair, self.btn_show_eraser,
+#                     self.btn_cluster, self.btn_process, self.btn_find_peaks, self.btn_export]:
+#             btn.setStyleSheet("font-size: 18px; padding: 10px;")
+#             btn.setFixedHeight(50)
+#
+#     def resizeEvent(self, event):
+#         # Nastaví šířku všech tlačítek ve spodním panelu na 30 % aktuální šířky okna
+#         new_width = int(self.width() * 0.3)
+#         for btn in [self.btn_load, self.btn_crop, self.btn_crosshair, self.btn_show_eraser,
+#                     self.btn_cluster, self.btn_process, self.btn_find_peaks, self.btn_export]:
+#             btn.setFixedWidth(new_width)
+#         super().resizeEvent(event)
+#
+#     def openEraserImageWindow(self):
+#         if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
+#             QMessageBox.information(self, "Informace", "Nejdříve proveďte oříznutí obrázku!")
+#             return
+#
+#         self.eraser_window = EraserImageWindow(self.full_quality_cropped, self.label_cropped)
+#     def open_cluster_window(self):
+#         if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
+#             QMessageBox.information(self, "Informace", "Nejdříve proveďte oříznutí obrázku!")
+#             return
+#
+#         self.cluster_window = ClusterWindow(self.full_quality_cropped, self.label_cropped)
+#         self.cluster_window.show()
+#     def load_image(self):
+#         file_name, _ = QFileDialog.getOpenFileName(self, "Otevřít obrázek", "", "Image Files (*.png *.jpg *.bmp)")
+#         if file_name:
+#             self.original_pixmap = QPixmap(file_name)
+#             self.display_image = self.original_pixmap.scaled(
+#                 self.label_original.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+#             )
+#             self.label_original.setPixmap(self.display_image)
+#             self.label_cropped.setText("Oříznutý obrázek")
+#             self.label_result.setText("Výsledek funkce se zobrazí zde")
+#             self.label_original.selection_rect = None
+#             self.statusBar().showMessage("Obrázek načten.", 3000)
+#         else:
+#             QMessageBox.warning(self, "Chyba", "Nebyl vybrán žádný obrázek.")
+#
+#     def crop_image(self):
+#         if self.original_pixmap and self.label_original.selection_rect:
+#             displayed = self.label_original.pixmap()
+#             if not displayed:
+#                 return
+#
+#             displayed_width = displayed.width()
+#             displayed_height = displayed.height()
+#             label_width = self.label_original.width()
+#             label_height = self.label_original.height()
+#             offset_x = (label_width - displayed_width) // 2
+#             offset_y = (label_height - displayed_height) // 2
+#
+#             sel = self.label_original.selection_rect
+#             x = max(sel.x() - offset_x, 0)
+#             y = max(sel.y() - offset_y, 0)
+#             w = sel.width()
+#             h = sel.height()
+#             if x + w > displayed_width:
+#                 w = displayed_width - x
+#             if y + h > displayed_height:
+#                 h = displayed_height - y
+#
+#             scale_x = self.original_pixmap.width() / displayed_width
+#             scale_y = self.original_pixmap.height() / displayed_height
+#
+#             orig_rect = QRect(
+#                 int(x * scale_x),
+#                 int(y * scale_y),
+#                 int(w * scale_x),
+#                 int(h * scale_y)
+#             )
+#             cropped_pixmap = self.original_pixmap.copy(orig_rect)
+#
+#             # Uložíme plnou kvalitu oříznutého obrázku pro další zpracování
+#             self.full_quality_cropped = cropped_pixmap
+#
+#             # Pro zobrazení v hlavním okně použijeme škálovanou verzi,
+#             # např. omezíme výšku na 300 pixelů
+#             max_display_height = 300
+#             display_pixmap = cropped_pixmap.scaledToHeight(max_display_height, Qt.SmoothTransformation)
+#             self.label_cropped.setPixmap(display_pixmap)
+#
+#         else:
+#             print("Obrázek nebyl načten nebo nebyla vybrána oblast!")
+#
+#     def toggle_crosshair(self, checked):
+#         self.label_original.show_crosshair = checked
+#         self.label_original.update()
+#
+#     def process_cropped_image(self):
+#         """
+#         1) Zkontroluje, zda máme k dispozici full_quality_cropped.
+#         2) Převede QPixmap na numpy pole pomocí qpixmap_to_array.
+#         3) Načte hodnoty x_min, x_max, y_min, y_max z QLineEdit.
+#         4) Zavolá funkci preprocess_image_from_array (importovanou ze simple_line.py),
+#            která vrátí NumPy pole obrázku, centrální linii a nejdelší konturu.
+#         5) Vykreslí graf spektra pomocí extract_and_plot_contour (také ze simple_line.py)
+#            a uloží výsledek do paměti.
+#         6) Výsledný graf zobrazí v label_result.
+#         """
+#         # Použijeme obrázek v plné kvalitě namísto label_cropped.pixmap()
+#         if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
+#             QMessageBox.warning(self, "Chyba", "Chybí oříznutý obrázek ve full quality!")
+#             return
+#
+#         cropped_pixmap = self.full_quality_cropped
+#
+#         try:
+#             # Načtení hodnot z QLineEdit
+#             x_min = float(self.input_xmin.text())
+#             x_max = float(self.input_xmax.text())
+#             y_min = float(self.input_ymin.text())
+#             y_max = float(self.input_ymax.text())
+#         except ValueError:
+#             QMessageBox.warning(self, "Chyba", "Chybné hodnoty Xmin/Xmax/Ymin/Ymax!")
+#             return
+#
+#         try:
+#             # Vypneme interaktivní režim matplotlib
+#             plt.ioff()
+#
+#             # Převod QPixmap na numpy pole
+#             img_array = qpixmap_to_array(cropped_pixmap)
+#
+#             # Použijeme funkci preprocess_image_from_array, která očekává numpy pole
+#             # Ujisti se, že jsi tuto funkci importoval, např.:
+#             # from simple_line import preprocess_image_from_array, extract_and_plot_contour
+#             img, center_line, longest_contour = preprocess_image_from_array(img_array)
+#
+#             # Vykreslíme graf a zároveň získáme data spektra (data_x, data_y)
+#             data_x, data_y = extract_and_plot_contour(img, center_line, x_min, x_max, y_min, y_max)
+#
+#             # Uložíme spektrum pro další zpracování (např. v tlačítku "find peaks")
+#             self.last_x = data_x
+#             self.last_y = data_y
+#
+#             # Uložíme vykreslený graf do paměti
+#             buf = io.BytesIO()
+#             plt.savefig(buf, format='png')
+#             plt.close()  # Zavře figure
+#             buf.seek(0)
+#
+#             # Vytvoříme QImage z bytestreamu a nastavíme jej do label_result
+#             qimage = QImage.fromData(buf.getvalue(), 'PNG')
+#             if qimage.isNull():
+#                 QMessageBox.critical(self, "Chyba", "Nepodařilo se vykreslit graf.")
+#             else:
+#                 pixmap = QPixmap.fromImage(qimage)
+#                 # Omezíme maximální výšku výsledného grafu, aby se nezvětšoval vertikálně
+#                 max_height = 600  # nastav dle potřeby
+#                 if pixmap.height() > max_height:
+#                     pixmap = pixmap.scaledToHeight(max_height, Qt.SmoothTransformation)
+#                 self.label_result.setPixmap(pixmap)
+#                 self.statusBar().showMessage("Spektrum bylo úspěšně zpracováno.", 3000)
+#
+#             # Zobrazíme popup s longest_contour
+#             self.show_longest_contour(longest_contour)
+#         except Exception as e:
+#             QMessageBox.critical(self, "Chyba", f"Nastala chyba při zpracování: {e}")
+#         finally:
+#             plt.ioff()
+#     def show_longest_contour(self, longest_contour):
+#         """
+#         Vytvoří a zobrazí vyskakovací okno s grafem longest_contour.
+#         """
+#         # Vytvoříme matplotlib figuru a vykreslíme longest_contour
+#         fig, ax = plt.subplots()
+#         ax.plot(longest_contour[:, 1], -longest_contour[:, 0], linewidth=2, label="Longest contour")
+#         ax.set_title("Longest contour")
+#         ax.legend()
+#
+#         # Uložíme graf do paměti
+#         buf = io.BytesIO()
+#         fig.savefig(buf, format='png')
+#         plt.close(fig)
+#         buf.seek(0)
+#
+#         # Převedeme uložený obrázek na QImage a QPixmap
+#         qimage = QImage.fromData(buf.getvalue(), 'PNG')
+#         pixmap = QPixmap.fromImage(qimage)
+#
+#         # Vytvoříme dialog, kde zobrazíme QPixmap
+#         dialog = QDialog(self)
+#         dialog.setWindowTitle("Longest Contour")
+#         layout = QVBoxLayout(dialog)
+#         label = QLabel()
+#         label.setPixmap(pixmap)
+#         layout.addWidget(label)
+#         dialog.setLayout(layout)
+#         dialog.exec_()
+#
+#     def export_to_csv(self):
+#         """
+#         Exportuje spektrum uložené v self.last_x a self.last_y do CSV.
+#         """
+#         if self.last_x is None or self.last_y is None:
+#             # self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
+#             QMessageBox.warning(self, "Chyba", "Spektrum ještě nebylo vygenerováno!")
+#             return
+#
+#         file_path, _ = QFileDialog.getSaveFileName(self, "Export to CSV", "", "CSV Files (*.csv)")
+#         if not file_path:
+#             return
+#
+#         try:
+#             with open(file_path, 'w', newline='') as csvfile:
+#                 writer = csv.writer(csvfile)
+#                 writer.writerow(["x", "y"])
+#                 for xi, yi in zip(self.last_x, self.last_y):
+#                     writer.writerow([xi, yi])
+#             # self.label_result.setText("Export byl úspěšný.")
+#             QMessageBox.information(self, "Úspěch", "Export byl úspěšný.")
+#             self.statusBar().showMessage("Export byl úspěšný.", 3000)
+#         except Exception as e:
+#             # self.label_result.setText(f"Export selhal: {e}")
+#             QMessageBox.critical(self, "Chyba", f"Export selhal: {e}")
+#
+#
+#     def find_peaks(self):
+#         try:
+#             sensitivity = float(self.input_sensitivity.text())
+#             min_distance = int(self.input_min_distance.text())
+#         except ValueError:
+#             # self.label_result.setText("Chybná hodnota pro sensitivity nebo min_distance!")
+#             QMessageBox.warning(self, "Chyba", "Chybná hodnota pro sensitivity nebo min_distance!")
+#             return
+#
+#         # Předpokládáme, že spektrum (x a y) bylo dříve vygenerováno a uloženo do self.last_x, self.last_y
+#         if not hasattr(self, 'last_x') or not hasattr(self, 'last_y'):
+#             # self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
+#             QMessageBox.warning(self, "Chyba", "Spektrum ještě nebylo vygenerováno!")
+#             return
+#
+#         # Zavoláme funkci pro hledání peaků s parametry
+#         plot_spectrum_with_peaks(self.last_x, self.last_y, sensitivity, min_distance, show_peaks=True)
+#         self.statusBar().showMessage("Peak detection proběhla úspěšně.", 3000)
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -746,7 +1169,6 @@ class MainWindow(QMainWindow):
         param_layout.setContentsMargins(0, 0, 0, 0)
         param_layout.setSpacing(5)
 
-        # Xleft
         label_xmin = QLabel("Xleft:")
         label_xmin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         param_layout.addWidget(label_xmin)
@@ -757,7 +1179,6 @@ class MainWindow(QMainWindow):
         self.input_xmin.setText("4000")
         param_layout.addWidget(self.input_xmin)
 
-        # Xright
         label_xmax = QLabel("Xright:")
         label_xmax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         param_layout.addWidget(label_xmax)
@@ -768,7 +1189,6 @@ class MainWindow(QMainWindow):
         self.input_xmax.setText("0")
         param_layout.addWidget(self.input_xmax)
 
-        # Ymin
         label_ymin = QLabel("Ymin:")
         label_ymin.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         param_layout.addWidget(label_ymin)
@@ -779,7 +1199,6 @@ class MainWindow(QMainWindow):
         self.input_ymin.setText("0")
         param_layout.addWidget(self.input_ymin)
 
-        # Ymax
         label_ymax = QLabel("Ymax:")
         label_ymax.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         param_layout.addWidget(label_ymax)
@@ -790,7 +1209,6 @@ class MainWindow(QMainWindow):
         self.input_ymax.setText("100")
         param_layout.addWidget(self.input_ymax)
 
-        # Další parametry pro Find Peaks
         sensitivity_label = QLabel("Sensitivity:")
         self.input_sensitivity = QLineEdit()
         self.input_sensitivity.setFixedWidth(50)
@@ -807,12 +1225,30 @@ class MainWindow(QMainWindow):
         param_layout.addStretch(1)
         main_layout.addLayout(param_layout)
 
+        # # Nový řádek pro načítání obrázku z clipboardu
+        # clipboard_layout = QHBoxLayout()
+        # clipboard_label = QLabel("Clipboard:")
+        # clipboard_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        # clipboard_layout.addWidget(clipboard_label)
+        # self.btn_clipboard = QPushButton("Načíst z clipboardu")
+        # self.btn_clipboard.clicked.connect(self.load_from_clipboard)
+        # clipboard_layout.addWidget(self.btn_clipboard)
+        # clipboard_layout.addStretch(1)
+        # main_layout.addLayout(clipboard_layout)
+
         # Spodní část: tlačítka rozdělená do 3 sloupců
         bottom_container = QWidget()
-        bottom_container.setFixedHeight(250)  # Pevná výška spodního panelu
+        bottom_container.setFixedHeight(250)
         bottom_layout = QHBoxLayout(bottom_container)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(5)
+
+        # Nový řádek pro načítání obrázku z clipboardu
+        clipboard_layout = QHBoxLayout()
+        self.btn_clipboard = QPushButton("Načíst z clipboardu")
+        self.btn_clipboard.clicked.connect(self.load_from_clipboard)
+        clipboard_layout.addWidget(self.btn_clipboard)
+        clipboard_layout.addStretch(1)
 
         # 1. sloupec: nápověda (help_label)
         help_label = QLabel(
@@ -822,12 +1258,12 @@ class MainWindow(QMainWindow):
             "4) Cropped picture you can process by <b>eraser</b> or <b>clustering</b><br>"
             "5) Processed picture can be transformed to dataset by pressing <b>Process spectra button</b><br>"
             "6) Processed can be exported to csv by pressing <b>export CSV</b> button<br>"
-
         )
         help_label.setWordWrap(True)
         help_label.setStyleSheet("font-size: 14px; color: #555;")
         help_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         col1_layout = QVBoxLayout()
+        col1_layout.addLayout(clipboard_layout)
         col1_layout.addWidget(help_label)
         col1_layout.addStretch()
         bottom_layout.addLayout(col1_layout)
@@ -881,31 +1317,19 @@ class MainWindow(QMainWindow):
 
         # Nastavení stylů pro tlačítka – zvětšený text, padding a pevná výška
         for btn in [self.btn_load, self.btn_crop, self.btn_crosshair, self.btn_show_eraser,
-                    self.btn_cluster, self.btn_process, self.btn_find_peaks, self.btn_export]:
+                    self.btn_cluster, self.btn_process, self.btn_find_peaks, self.btn_export,
+                    self.btn_clipboard]:
             btn.setStyleSheet("font-size: 18px; padding: 10px;")
             btn.setFixedHeight(50)
 
     def resizeEvent(self, event):
-        # Nastaví šířku všech tlačítek ve spodním panelu na 30 % aktuální šířky okna
         new_width = int(self.width() * 0.3)
         for btn in [self.btn_load, self.btn_crop, self.btn_crosshair, self.btn_show_eraser,
-                    self.btn_cluster, self.btn_process, self.btn_find_peaks, self.btn_export]:
+                    self.btn_cluster, self.btn_process, self.btn_find_peaks, self.btn_export,
+                    self.btn_clipboard]:
             btn.setFixedWidth(new_width)
         super().resizeEvent(event)
 
-    def openEraserImageWindow(self):
-        if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
-            QMessageBox.information(self, "Informace", "Nejdříve proveďte oříznutí obrázku!")
-            return
-
-        self.eraser_window = EraserImageWindow(self.full_quality_cropped, self.label_cropped)
-    def open_cluster_window(self):
-        if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
-            QMessageBox.information(self, "Informace", "Nejdříve proveďte oříznutí obrázku!")
-            return
-
-        self.cluster_window = ClusterWindow(self.full_quality_cropped, self.label_cropped)
-        self.cluster_window.show()
     def load_image(self):
         file_name, _ = QFileDialog.getOpenFileName(self, "Otevřít obrázek", "", "Image Files (*.png *.jpg *.bmp)")
         if file_name:
@@ -921,6 +1345,21 @@ class MainWindow(QMainWindow):
         else:
             QMessageBox.warning(self, "Chyba", "Nebyl vybrán žádný obrázek.")
 
+    def load_from_clipboard(self):
+        clipboard = QApplication.clipboard()
+        pixmap = clipboard.pixmap()
+        if not pixmap.isNull():
+            self.original_pixmap = pixmap
+            # Nastavíme full_quality_cropped, aby byl k dispozici pro další zpracování
+            self.full_quality_cropped = pixmap
+            self.display_image = self.original_pixmap.scaled(
+                self.label_original.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            self.label_original.setPixmap(self.display_image)
+            self.label_cropped.setPixmap(self.display_image)
+            self.statusBar().showMessage("Obrázek z clipboardu načten.", 3000)
+        else:
+            QMessageBox.warning(self, "Chyba", "V clipboardu není dostupný obrázek.")
     def crop_image(self):
         if self.original_pixmap and self.label_original.selection_rect:
             displayed = self.label_original.pixmap()
@@ -955,11 +1394,7 @@ class MainWindow(QMainWindow):
             )
             cropped_pixmap = self.original_pixmap.copy(orig_rect)
 
-            # Uložíme plnou kvalitu oříznutého obrázku pro další zpracování
             self.full_quality_cropped = cropped_pixmap
-
-            # Pro zobrazení v hlavním okně použijeme škálovanou verzi,
-            # např. omezíme výšku na 300 pixelů
             max_display_height = 300
             display_pixmap = cropped_pixmap.scaledToHeight(max_display_height, Qt.SmoothTransformation)
             self.label_cropped.setPixmap(display_pixmap)
@@ -971,18 +1406,22 @@ class MainWindow(QMainWindow):
         self.label_original.show_crosshair = checked
         self.label_original.update()
 
+    def openEraserImageWindow(self):
+        if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
+            QMessageBox.information(self, "Informace", "Nejdříve proveďte oříznutí obrázku!")
+            return
+
+        self.eraser_window = EraserImageWindow(self.full_quality_cropped, self.label_cropped)
+
+    def open_cluster_window(self):
+        if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
+            QMessageBox.information(self, "Informace", "Nejdříve proveďte oříznutí obrázku!")
+            return
+
+        self.cluster_window = ClusterWindow(self.full_quality_cropped, self.label_cropped)
+        self.cluster_window.show()
+
     def process_cropped_image(self):
-        """
-        1) Zkontroluje, zda máme k dispozici full_quality_cropped.
-        2) Převede QPixmap na numpy pole pomocí qpixmap_to_array.
-        3) Načte hodnoty x_min, x_max, y_min, y_max z QLineEdit.
-        4) Zavolá funkci preprocess_image_from_array (importovanou ze simple_line.py),
-           která vrátí NumPy pole obrázku, centrální linii a nejdelší konturu.
-        5) Vykreslí graf spektra pomocí extract_and_plot_contour (také ze simple_line.py)
-           a uloží výsledek do paměti.
-        6) Výsledný graf zobrazí v label_result.
-        """
-        # Použijeme obrázek v plné kvalitě namísto label_cropped.pixmap()
         if not hasattr(self, 'full_quality_cropped') or self.full_quality_cropped is None:
             QMessageBox.warning(self, "Chyba", "Chybí oříznutý obrázek ve full quality!")
             return
@@ -990,7 +1429,6 @@ class MainWindow(QMainWindow):
         cropped_pixmap = self.full_quality_cropped
 
         try:
-            # Načtení hodnot z QLineEdit
             x_min = float(self.input_xmin.text())
             x_max = float(self.input_xmax.text())
             y_min = float(self.input_ymin.text())
@@ -1000,70 +1438,43 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            # Vypneme interaktivní režim matplotlib
             plt.ioff()
-
-            # Převod QPixmap na numpy pole
             img_array = qpixmap_to_array(cropped_pixmap)
-
-            # Použijeme funkci preprocess_image_from_array, která očekává numpy pole
-            # Ujisti se, že jsi tuto funkci importoval, např.:
-            # from simple_line import preprocess_image_from_array, extract_and_plot_contour
             img, center_line, longest_contour = preprocess_image_from_array(img_array)
-
-            # Vykreslíme graf a zároveň získáme data spektra (data_x, data_y)
             data_x, data_y = extract_and_plot_contour(img, center_line, x_min, x_max, y_min, y_max)
-
-            # Uložíme spektrum pro další zpracování (např. v tlačítku "find peaks")
             self.last_x = data_x
             self.last_y = data_y
-
-            # Uložíme vykreslený graf do paměti
             buf = io.BytesIO()
             plt.savefig(buf, format='png')
-            plt.close()  # Zavře figure
+            plt.close()
             buf.seek(0)
-
-            # Vytvoříme QImage z bytestreamu a nastavíme jej do label_result
             qimage = QImage.fromData(buf.getvalue(), 'PNG')
             if qimage.isNull():
                 QMessageBox.critical(self, "Chyba", "Nepodařilo se vykreslit graf.")
             else:
                 pixmap = QPixmap.fromImage(qimage)
-                # Omezíme maximální výšku výsledného grafu, aby se nezvětšoval vertikálně
-                max_height = 600  # nastav dle potřeby
+                max_height = 600
                 if pixmap.height() > max_height:
                     pixmap = pixmap.scaledToHeight(max_height, Qt.SmoothTransformation)
                 self.label_result.setPixmap(pixmap)
                 self.statusBar().showMessage("Spektrum bylo úspěšně zpracováno.", 3000)
-
-            # Zobrazíme popup s longest_contour
             self.show_longest_contour(longest_contour)
         except Exception as e:
             QMessageBox.critical(self, "Chyba", f"Nastala chyba při zpracování: {e}")
         finally:
             plt.ioff()
+
     def show_longest_contour(self, longest_contour):
-        """
-        Vytvoří a zobrazí vyskakovací okno s grafem longest_contour.
-        """
-        # Vytvoříme matplotlib figuru a vykreslíme longest_contour
         fig, ax = plt.subplots()
         ax.plot(longest_contour[:, 1], -longest_contour[:, 0], linewidth=2, label="Longest contour")
         ax.set_title("Longest contour")
         ax.legend()
-
-        # Uložíme graf do paměti
         buf = io.BytesIO()
         fig.savefig(buf, format='png')
         plt.close(fig)
         buf.seek(0)
-
-        # Převedeme uložený obrázek na QImage a QPixmap
         qimage = QImage.fromData(buf.getvalue(), 'PNG')
         pixmap = QPixmap.fromImage(qimage)
-
-        # Vytvoříme dialog, kde zobrazíme QPixmap
         dialog = QDialog(self)
         dialog.setWindowTitle("Longest Contour")
         layout = QVBoxLayout(dialog)
@@ -1074,11 +1485,7 @@ class MainWindow(QMainWindow):
         dialog.exec_()
 
     def export_to_csv(self):
-        """
-        Exportuje spektrum uložené v self.last_x a self.last_y do CSV.
-        """
         if self.last_x is None or self.last_y is None:
-            # self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
             QMessageBox.warning(self, "Chyba", "Spektrum ještě nebylo vygenerováno!")
             return
 
@@ -1092,33 +1499,25 @@ class MainWindow(QMainWindow):
                 writer.writerow(["x", "y"])
                 for xi, yi in zip(self.last_x, self.last_y):
                     writer.writerow([xi, yi])
-            # self.label_result.setText("Export byl úspěšný.")
             QMessageBox.information(self, "Úspěch", "Export byl úspěšný.")
             self.statusBar().showMessage("Export byl úspěšný.", 3000)
         except Exception as e:
-            # self.label_result.setText(f"Export selhal: {e}")
             QMessageBox.critical(self, "Chyba", f"Export selhal: {e}")
-
 
     def find_peaks(self):
         try:
             sensitivity = float(self.input_sensitivity.text())
             min_distance = int(self.input_min_distance.text())
         except ValueError:
-            # self.label_result.setText("Chybná hodnota pro sensitivity nebo min_distance!")
             QMessageBox.warning(self, "Chyba", "Chybná hodnota pro sensitivity nebo min_distance!")
             return
 
-        # Předpokládáme, že spektrum (x a y) bylo dříve vygenerováno a uloženo do self.last_x, self.last_y
         if not hasattr(self, 'last_x') or not hasattr(self, 'last_y'):
-            # self.label_result.setText("Spektrum ještě nebylo vygenerováno!")
             QMessageBox.warning(self, "Chyba", "Spektrum ještě nebylo vygenerováno!")
             return
 
-        # Zavoláme funkci pro hledání peaků s parametry
         plot_spectrum_with_peaks(self.last_x, self.last_y, sensitivity, min_distance, show_peaks=True)
         self.statusBar().showMessage("Peak detection proběhla úspěšně.", 3000)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
