@@ -505,6 +505,8 @@ class CropLabel(QLabel):
             painter.setPen(cross_pen)
             painter.drawLine(0, self.current_cursor_pos.y(), self.width(), self.current_cursor_pos.y())
             painter.drawLine(self.current_cursor_pos.x(), 0, self.current_cursor_pos.x(), self.height())
+
+
 class EraserImageWindow(QWidget):
     def __init__(self, cropped_pixmap=None, target_label=None):
         super().__init__()
@@ -521,25 +523,37 @@ class EraserImageWindow(QWidget):
             self.canvas = Canvas(cropped_pixmap, self)
             self.color_indicator = ColorIndicator(self)
 
-            # Vytvoříme kontejner pro indikátor barvy a popisek
-            color_container = QWidget(self)
-            color_layout = QHBoxLayout(color_container)
+            # Vytvoříme kontejner pro indikátor barvy a popisek a tlačítko "Zpět"
+            color_panel = QWidget(self)
+            color_layout = QVBoxLayout(color_panel)
             color_layout.setContentsMargins(0, 0, 0, 0)
             color_layout.setSpacing(5)
-            color_layout.addWidget(self.color_indicator)
-
+            # První řádek: horizontální layout s indikátorem a popiskem
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(5)
+            row.addWidget(self.color_indicator)
             selected_label = QLabel("Selected color", self)
             selected_label.setStyleSheet("font-size: 14px;")
-            color_layout.addWidget(selected_label)
+            row.addWidget(selected_label)
+            row.addStretch()
+            color_layout.addLayout(row)
+            # Druhý řádek: tlačítko "Zpět"
+            self.btn_undo = QPushButton("Zpět", self)
+            self.btn_undo.setStyleSheet("font-size: 18px; padding: 10px;")
+            self.btn_undo.clicked.connect(self.undo_canvas)
+            color_layout.addWidget(self.btn_undo)
 
-            # Vytvoříme kontejner pro plátno a indikátor
+            # Kontejner pro Canvas a color_panel (vedle sebe)
             container = QWidget(self)
             h_layout = QHBoxLayout(container)
+            h_layout.setContentsMargins(0, 0, 0, 0)
+            h_layout.setSpacing(10)
             h_layout.addWidget(QScrollAreaWithCentering(self.canvas))
-            h_layout.addWidget(color_container)
+            h_layout.addWidget(color_panel)
             self.layout.addWidget(container)
         else:
-            self.label_image = QLabel("Žádný oříznutý obrázek")
+            self.label_image = QLabel("Žádný oříznutý obrázek", self)
             self.label_image.setAlignment(Qt.AlignCenter)
             self.layout.addWidget(self.label_image)
 
@@ -556,7 +570,7 @@ class EraserImageWindow(QWidget):
         self.bottom_widget.setMinimumHeight(200)
         bottom_layout = QHBoxLayout(self.bottom_widget)
         bottom_layout.setAlignment(Qt.AlignCenter)
-        self.btn_save = QPushButton("Uložit obrázek")
+        self.btn_save = QPushButton("Uložit obrázek", self)
         self.btn_save.setStyleSheet("font-size: 18px; padding: 10px;")
         self.btn_save.clicked.connect(self.select_eraser)
         bottom_layout.addWidget(self.btn_save)
@@ -566,6 +580,10 @@ class EraserImageWindow(QWidget):
         new_width = int(self.width() * 0.3)
         self.btn_save.setFixedWidth(new_width)
         super().resizeEvent(event)
+
+    def undo_canvas(self):
+        if hasattr(self, 'canvas'):
+            self.canvas.undo()
 
     def select_eraser(self):
         if self.target_label and hasattr(self, 'canvas'):
@@ -602,6 +620,7 @@ class Canvas(QWidget):
         super().__init__(parent)
         self.eraserRadius = 10  # Poloměr štětce/eraseru
         if pixmap is None or pixmap.isNull():
+            # Pokud není platný pixmap, vytvoříme prázdný obrázek
             self.image = QImage()
         else:
             self.image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
@@ -610,6 +629,9 @@ class Canvas(QWidget):
         self.setFixedSize(self.original_size)
         # Defaultní barva pro kreslení nastavena na bílou
         self.brush_color = QColor("white")
+        # Zásobník pro undo – inicializován počátečním stavem
+        self.undo_stack = [self.image.copy()]
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -643,12 +665,16 @@ class Canvas(QWidget):
                 color = self.image.pixelColor(x, y)
                 self.brush_color = color
                 print("Vybraná barva:", color.name())
-                # Aktualizace color indicator v okně
+                # Aktualizace color indicator v okně, pokud existuje
                 top = self.window()
                 if hasattr(top, 'color_indicator'):
                     top.color_indicator.setColor(self.brush_color)
                     top.color_indicator.update()
             self.update()
+        elif event.button() == Qt.LeftButton:
+            # Uložíme aktuální stav před úpravou
+            self.undo_stack.append(self.image.copy())
+            self.paintAt(event)
         else:
             super().mousePressEvent(event)
 
@@ -672,6 +698,12 @@ class Canvas(QWidget):
         painter.end()
         self.update()
 
+    def undo(self):
+        # Pokud je v zásobníku více než jeden stav, vrátíme se o jeden krok zpět
+        if len(self.undo_stack) > 1:
+            self.undo_stack.pop()
+            self.image = self.undo_stack[-1].copy()
+            self.update()
 
 class MainWindow(QMainWindow):
     def __init__(self):
