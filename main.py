@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog, QScrollArea, QColorDialog, QSplitter
 )
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent, QMouseEvent
+from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent, QMouseEvent, QColor
 from PyQt5.QtCore import Qt, QRect, QPoint
 
 from simple_line import preprocess_image_from_array, extract_and_plot_contour
@@ -511,27 +511,38 @@ class EraserImageWindow(QWidget):
         self.setWindowTitle("Eraser Window")
         self.cropped_pixmap = cropped_pixmap  # Originální pixmapa (full quality)
         self.target_label = target_label  # Widget, kam se má výsledný obrázek uložit
-        self.zoom_factor = 1.0  # Počáteční zoom faktor (není přímo použit v této třídě)
+        self.zoom_factor = 1.0
         self.init_ui(cropped_pixmap)
         self.showMaximized()
 
     def init_ui(self, cropped_pixmap):
         self.layout = QVBoxLayout(self)
-
         if cropped_pixmap and not cropped_pixmap.isNull():
-            # Vytvoříme widget Canvas pro úpravu obrázku se zoomem a výběrem barvy
             self.canvas = Canvas(cropped_pixmap, self)
-            # Vložíme Canvas do QScrollArea a centrování nastavíme pomocí setAlignment
-            scroll_area = QScrollArea()
-            scroll_area.setWidget(self.canvas)
-            scroll_area.setAlignment(Qt.AlignCenter)
-            self.layout.addWidget(scroll_area)
+            self.color_indicator = ColorIndicator(self)
+
+            # Vytvoříme kontejner pro indikátor barvy a popisek
+            color_container = QWidget(self)
+            color_layout = QHBoxLayout(color_container)
+            color_layout.setContentsMargins(0, 0, 0, 0)
+            color_layout.setSpacing(5)
+            color_layout.addWidget(self.color_indicator)
+
+            selected_label = QLabel("Selected color", self)
+            selected_label.setStyleSheet("font-size: 14px;")
+            color_layout.addWidget(selected_label)
+
+            # Vytvoříme kontejner pro plátno a indikátor
+            container = QWidget(self)
+            h_layout = QHBoxLayout(container)
+            h_layout.addWidget(QScrollAreaWithCentering(self.canvas))
+            h_layout.addWidget(color_container)
+            self.layout.addWidget(container)
         else:
             self.label_image = QLabel("Žádný oříznutý obrázek")
             self.label_image.setAlignment(Qt.AlignCenter)
             self.layout.addWidget(self.label_image)
 
-        # Help label s nápovědou
         help_label = QLabel(
             "Toto okno slouží k úpravě obrázku pomocí gumy. "
             "Vyberte si barvu pravým kliknutím myši v obrázku, upravte obrázek levým tlačítkem myši, "
@@ -541,50 +552,55 @@ class EraserImageWindow(QWidget):
         help_label.setStyleSheet("font-size: 14px; color: #555;")
         self.layout.addWidget(help_label)
 
-        # Spodní widget s minimální výškou 200px pro tlačítko
         self.bottom_widget = QWidget(self)
         self.bottom_widget.setMinimumHeight(200)
         bottom_layout = QHBoxLayout(self.bottom_widget)
         bottom_layout.setAlignment(Qt.AlignCenter)
-
         self.btn_save = QPushButton("Uložit obrázek")
         self.btn_save.setStyleSheet("font-size: 18px; padding: 10px;")
         self.btn_save.clicked.connect(self.select_eraser)
         bottom_layout.addWidget(self.btn_save)
-
         self.layout.addWidget(self.bottom_widget)
 
     def resizeEvent(self, event):
-        # Nastavení šířky tlačítka na 30 % aktuální šířky okna
         new_width = int(self.width() * 0.3)
         self.btn_save.setFixedWidth(new_width)
         super().resizeEvent(event)
 
-
-
-
     def select_eraser(self):
-        """
-        Při stisknutí tlačítka:
-         - Převádí aktuální QImage z Canvasu na QPixmap.
-         - Nastaví tento pixmap do target_label.
-         - Aktualizuje instanci, kde je uložen původní oříznutý obrázek,
-           a tím přepíše původní obrázek, který je vstupem pro další zpracování.
-         - Zavře okno.
-        """
         if self.target_label and hasattr(self, 'canvas'):
             new_pixmap = QPixmap.fromImage(self.canvas.image)
             self.target_label.setPixmap(new_pixmap)
-            # Aktualizace instance s původním obrázkem (např. MainWindow.full_quality_cropped)
             main_window = self.target_label.window()
             if hasattr(main_window, 'full_quality_cropped'):
                 main_window.full_quality_cropped = new_pixmap
         self.close()
+class QScrollAreaWithCentering(QScrollArea):
+    def __init__(self, widget, parent=None):
+        super().__init__(parent)
+        self.setWidget(widget)
+        self.setAlignment(Qt.AlignCenter)
+        self.setWidgetResizable(True)
+class ColorIndicator(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.color = QColor("white")  # Defaultně bílá
+        self.setFixedSize(50, 50)  # Velikost indikátoru
+
+    def setColor(self, color):
+        self.color = color
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setPen(Qt.black)
+        painter.setBrush(self.color)
+        diameter = min(self.width(), self.height()) - 10
+        painter.drawEllipse(5, 5, diameter, diameter)
 class Canvas(QWidget):
     def __init__(self, pixmap, parent=None):
         super().__init__(parent)
         self.eraserRadius = 10  # Poloměr štětce/eraseru
-        # Převod QPixmap na QImage ve full quality se zachováním alfa kanálu
         if pixmap is None or pixmap.isNull():
             self.image = QImage()
         else:
@@ -592,29 +608,27 @@ class Canvas(QWidget):
         self.original_size = self.image.size()  # Původní velikost obrázku
         self.zoom_factor = 1.0  # Výchozí zoom faktor
         self.setFixedSize(self.original_size)
-        # Výchozí barva pro kreslení; pokud není vybrána, použije se režim gumy
-        self.brush_color = None
+        # Defaultní barva pro kreslení nastavena na bílou
+        self.brush_color = QColor("white")
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        # Aplikujeme škálovací transformaci
+        painter.save()
         painter.scale(self.zoom_factor, self.zoom_factor)
         painter.drawImage(0, 0, self.image)
+        painter.restore()
 
     def wheelEvent(self, event: QWheelEvent):
-        # Zoom pomocí kolečka myši
         delta = event.angleDelta().y()
         if delta > 0:
             self.zoom_factor *= 1.1
         else:
             self.zoom_factor *= 0.9
-        # Nastavíme limity zoomu
         if self.zoom_factor < 0.1:
             self.zoom_factor = 0.1
         if self.zoom_factor > 10:
             self.zoom_factor = 10
-        # Aktualizujeme velikost widgetu podle nového zoom faktoru
         new_width = int(self.original_size.width() * self.zoom_factor)
         new_height = int(self.original_size.height() * self.zoom_factor)
         self.setFixedSize(new_width, new_height)
@@ -622,8 +636,6 @@ class Canvas(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.RightButton:
-            # Pravým tlačítkem vybereme barvu přímo z obrázku (color picker)
-            # Přepočítáme souřadnice z widgetu na souřadnice originálního obrázku
             pos = event.pos()
             x = int(pos.x() / self.zoom_factor)
             y = int(pos.y() / self.zoom_factor)
@@ -631,6 +643,12 @@ class Canvas(QWidget):
                 color = self.image.pixelColor(x, y)
                 self.brush_color = color
                 print("Vybraná barva:", color.name())
+                # Aktualizace color indicator v okně
+                top = self.window()
+                if hasattr(top, 'color_indicator'):
+                    top.color_indicator.setColor(self.brush_color)
+                    top.color_indicator.update()
+            self.update()
         else:
             super().mousePressEvent(event)
 
@@ -639,24 +657,21 @@ class Canvas(QWidget):
             self.paintAt(event)
 
     def paintAt(self, event: QMouseEvent):
-        # Přepočítáme pozici z widget souřadnic na originální souřadnice obrázku
         pos = event.pos()
         x = int(pos.x() / self.zoom_factor)
         y = int(pos.y() / self.zoom_factor)
         painter = QPainter(self.image)
         painter.setPen(Qt.NoPen)
         if self.brush_color is not None:
-            # Pokud máme vybranou barvu, kreslíme s ní (normální režim)
             painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
             painter.setBrush(self.brush_color)
         else:
-            # Jinak použijeme režim gumy (clear)
             painter.setCompositionMode(QPainter.CompositionMode_Clear)
-            painter.setBrush(Qt.black)  # V Clear módu hodnota brush nehraje roli
-        # Vykreslíme vyplněný kruh se středem v (x,y)
+            painter.setBrush(Qt.black)
         painter.drawEllipse(QPoint(x, y), self.eraserRadius, self.eraserRadius)
         painter.end()
         self.update()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -770,11 +785,11 @@ class MainWindow(QMainWindow):
         # 1. sloupec: nápověda (help_label)
         help_label = QLabel(
             "1) Press the button <b>load picture</b> or insert picture from clipboard<br>"
-            "2) Select area to crop picture by mouse or click and select by holding <b>ctrl</b> with pressing arrows and press button <b>crop picture</b><br>"
+            "2) Select area to be cropped by mouse or click and select by holding <b>ctrl</b> with pressing arrows and press button <b>crop picture</b><br>"
             "3) By holding <b>ctrl + shift</b> you can jump in selecting by arrows up to first pixel color change<br>"
             "4) Cropped picture you can process by <b>eraser</b> or <b>clustering</b><br>"
-            "5) Processed picture you can transform to dataset by pressing <b>Process spectra button</b><br>"
-            "6) Processed spectra you can export to csv by pressing <b>export CSV</b> button<br>"
+            "5) Processed picture can be transformed to dataset by pressing <b>Process spectra button</b><br>"
+            "6) Processed can be exported to csv by pressing <b>export CSV</b> button<br>"
 
         )
         help_label.setWordWrap(True)
