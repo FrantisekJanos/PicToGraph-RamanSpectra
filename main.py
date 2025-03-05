@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLineEdit, QSizePolicy, QMessageBox, QStatusBar, QDialog, QScrollArea, QColorDialog, QSplitter
 )
-from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent, QMouseEvent, QColor
+from PyQt5.QtGui import QPixmap, QPainter, QPen, QIcon, QImage, QWheelEvent, QMouseEvent, QColor, QGuiApplication
 from PyQt5.QtCore import Qt, QRect, QPoint
 from PyQt5.Qt import QApplication
 
@@ -227,6 +227,17 @@ class CropLabel(QLabel):
         # Atributy pro režim kříže (pravítko)
         self.show_crosshair = False
         self.current_cursor_pos = QPoint(0, 0)
+        self._pixmap = None
+    def setPixmap(self, pixmap):
+        self._pixmap = pixmap
+        super().setPixmap(pixmap)
+
+    def resizeEvent(self, event):
+        if self._pixmap:
+            # Škálování obrázku tak, aby se vešel do aktuální velikosti widgetu
+            scaled = self._pixmap.scaled(self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            super().setPixmap(scaled)
+        super().resizeEvent(event)
     def enterEvent(self, event):
         # Zobrazí lupu, jakmile kurzor vstoupí do widgetu
         self.magnifier.show()
