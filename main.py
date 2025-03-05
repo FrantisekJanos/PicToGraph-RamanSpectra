@@ -111,7 +111,8 @@ class ClusterWindow(QWidget):
         help_label = QLabel(
             "Toto okno slouží k generování clusterů z oříznutého obrázku. "
             "Zadejte počet clusterů a klikněte na tlačítko <b>vygeneruj clustery</b> "
-            "pro zobrazení výsledků."
+            "pro zobrazení výsledků.<br>"
+            "Zvolte co nejmenší nutné množství clusterů. Příliš velké množství clusterů může způsobit necelistvou konturu a následné zpracování spektra zpracuje jen část spektra - nejdelší celistvou konturu."
         )
         help_label.setWordWrap(True)
         help_label.setStyleSheet("font-size: 14px; color: #555;")
